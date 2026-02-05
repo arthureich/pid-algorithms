@@ -37,17 +37,29 @@ def convolve2d(image: List[List[int]], kernel: List[List[float]]) -> List[List[f
     pad_h = k_h // 2
     pad_w = k_w // 2
     output: List[List[float]] = [[0.0 for _ in range(width)] for _ in range(height)]
+    
+    active_kernel_indices = []
+    for ky in range(k_h):
+        for kx in range(k_w):
+            if kernel[ky][kx] != 0:
+                active_kernel_indices.append((ky, kx, kernel[ky][kx]))
+
     for y in range(height):
         for x in range(width):
             acc = 0.0
-            for ky in range(k_h):
-                for kx in range(k_w):
-                    iy = min(max(y + ky - pad_h, 0), height - 1)
-                    ix = min(max(x + kx - pad_w, 0), width - 1)
-                    acc += image[iy][ix] * kernel[ky][kx]
+            for ky, kx, k_val in active_kernel_indices:
+                iy = y + ky - pad_h
+                ix = x + kx - pad_w
+                
+                if iy < 0: iy = 0
+                elif iy >= height: iy = height - 1
+                
+                if ix < 0: ix = 0
+                elif ix >= width: ix = width - 1
+                
+                acc += image[iy][ix] * k_val
             output[y][x] = acc
     return output
-
 
 def gaussian_kernel(size: int, sigma: float) -> List[List[float]]:
     ax = [i - size // 2 for i in range(size)]
