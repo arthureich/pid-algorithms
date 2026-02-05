@@ -51,7 +51,9 @@ class ImagePanel(ttk.Label):
         self.image = None
 
     def update_image(self, image: Image.Image) -> None:
-        self.image = ImageTk.PhotoImage(image)
+        display_img = image.copy()
+        display_img.thumbnail((350, 350), Image.Resampling.LANCZOS)
+        self.image = ImageTk.PhotoImage(display_img)
         self.configure(image=self.image, text="")
 
     def clear(self) -> None:
@@ -108,12 +110,14 @@ class PIDApp(tk.Tk):
 
         def thread_target():
             try:
+                print("Iniciando Worker...") # Debug no console
                 result = worker_func()
-                # Agenda a atualização da UI na thread principal
+                print("Worker finalizado com sucesso.")
                 self.after(0, lambda: self._on_process_complete(update_func, result))
             except Exception as e:
-                print(f"Erro na thread: {e}")
-                self.after(0, lambda: self._on_process_error(e))
+                import traceback
+                traceback.print_exc() # Isso vai mostrar exatamente ONDE o código parou no seu terminal
+                self.after(0, lambda err=e: self._on_process_error(err))
 
         threading.Thread(target=thread_target, daemon=True).start()
 
@@ -231,35 +235,83 @@ class PIDApp(tk.Tk):
         self._run_async(worker, update_ui)
 
     def _build_freeman_tab(self) -> None:
-        frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text="5: Cadeia de Freeman")
+        # 1. Cria o frame principal da aba
+        tab_frame = ttk.Frame(self.notebook)
+        self.notebook.add(tab_frame, text="5: Cadeia de Freeman")
 
-        control = ttk.Frame(frame)
+        # 2. Área de Controle (Botões) - Fixa no topo
+        control = ttk.Frame(tab_frame)
         control.pack(fill="x", pady=5)
         ttk.Button(control, text="Carregar e Processar", command=self._run_freeman).pack(side="left", padx=5)
 
-        images_frame = ttk.Frame(frame)
+        # --- INÍCIO DA LÓGICA DE SCROLL ---
+        
+        # 3. Container para o Canvas e a Barra de Rolagem
+        container = ttk.Frame(tab_frame)
+        container.pack(fill="both", expand=True)
+
+        # Canvas onde o conteúdo será desenhado
+        canvas = tk.Canvas(container)
+        
+        # Barra de rolagem vertical ligada ao Canvas
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        
+        # Frame interno que ficará "dentro" do Canvas (é aqui que colocamos os widgets)
+        scrollable_frame = ttk.Frame(canvas)
+
+        # Configura o scrollable_frame para atualizar a área de rolagem quando mudar de tamanho
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        # Cria a janela dentro do canvas apontando para o frame
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        
+        # Conecta o canvas à barra de rolagem
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Posiciona Canvas e Scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # (Opcional) Habilita scroll com a roda do mouse (Windows/Linux)
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        # Liga o evento de scroll quando o mouse entra no canvas
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        # --- FIM DA LÓGICA DE SCROLL ---
+
+        # Agora adicionamos tudo dentro de 'scrollable_frame' em vez de 'tab_frame'
+        
+        images_frame = ttk.Frame(scrollable_frame)
         images_frame.pack(fill="both", expand=True)
 
         row_top = ttk.Frame(images_frame)
-        row_top.pack(fill="both", expand=True)
+        row_top.pack(fill="both", expand=True, pady=5)
         row_bottom = ttk.Frame(images_frame)
-        row_bottom.pack(fill="both", expand=True)
+        row_bottom.pack(fill="both", expand=True, pady=5)
 
         self.freeman_panels = []
-        for label in [
+        labels = [
             "(a) Original/ruidosa",
             "(b) Suavizada (Box 9x9)",
             "(c) Limiarizada (Otsu)",
             "(d) Fronteira maior",
             "(e) Fronteira subamostrada",
             "(f) Pontos conectados",
-        ]:
-            panel = ImagePanel(row_top if len(self.freeman_panels) < 3 else row_bottom, label)
+        ]
+        
+        for i, label in enumerate(labels):
+            # Coloca os 3 primeiros na linha de cima, os outros na de baixo
+            parent = row_top if i < 3 else row_bottom
+            panel = ImagePanel(parent, label)
             panel.pack(side="left", expand=True, fill="both", padx=5, pady=5)
             self.freeman_panels.append(panel)
 
-        self.freeman_text = tk.Text(frame, height=10, wrap="word")
+        self.freeman_text = tk.Text(scrollable_frame, height=12, wrap="word") # Aumentei um pouco a altura do texto
         self.freeman_text.pack(fill="both", expand=True, padx=5, pady=5)
         self.freeman_text.insert("1.0", "Carregue uma imagem para gerar a cadeia.")
         self.freeman_text.configure(state="disabled")
@@ -268,15 +320,31 @@ class PIDApp(tk.Tk):
         image = self._load_image()
         if image is None: return
         
+        def progress(message: str) -> None:
+            def apply_message() -> None:
+                self.status_var.set(message)
+                self.update_idletasks()
+
+            self.after(0, apply_message)
+
         def worker():
+            progress("Freeman: suavizando (Box 9x9)...")
             smoothed = box_filter(image, 9)
+            progress("Freeman: limiarizando (Otsu)...")
             _, binary = otsu_threshold(smoothed)
+            progress("Freeman: buscando maior componente...")
             largest = largest_component_mask(binary)
+            progress("Freeman: extraindo fronteira...")
             chain_result = freeman_chain_code(largest)
+            progress("Freeman: preparando imagens de saída...")
             boundary_image = boundary_to_image(chain_result.boundary, len(largest), len(largest[0]))
+            progress("Freeman: preparando 1")
             subsampled = subsample_boundary(chain_result.boundary, max(1, len(chain_result.boundary) // 60))
+            progress("Freeman: preparando 2")
             subsampled_image = boundary_to_image(subsampled, len(largest), len(largest[0]))
+            progress("Freeman: preparando 3")
             connected_image = connect_points_image(subsampled, len(largest), len(largest[0]))
+            progress("Freeman: preparado")
             return image, smoothed, binary, boundary_image, subsampled_image, connected_image, chain_result
 
         def update_ui(result):

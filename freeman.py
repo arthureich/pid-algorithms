@@ -222,25 +222,38 @@ def subsample_boundary(boundary: List[Tuple[int, int]], step: int) -> List[Tuple
 def _draw_line(image: List[List[int]], start: Tuple[int, int], end: Tuple[int, int], value: int) -> None:
     y0, x0 = start
     y1, x1 = end
+    
     dy = abs(y1 - y0)
     dx = abs(x1 - x0)
     sy = 1 if y0 < y1 else -1
     sx = 1 if x0 < x1 else -1
     err = dx - dy
+    
     y, x = y0, x0
     height = len(image)
     width = len(image[0])
+
     while True:
+        # 1. Desenha o pixel atual se estiver dentro dos limites
         if 0 <= y < height and 0 <= x < width:
             image[y][x] = value
+            
+        # 2. CONDIÇÃO DE PARADA: Verificação imediata após desenhar
         if y == y1 and x == x1:
-            e2 = 2 * err
+            break
+            
+        # 3. Cálculo do erro e incremento
+        e2 = 2 * err
         if e2 > -dy:
             err -= dy
             x += sx
         if e2 < dx:
             err += dx
             y += sy
+            
+        # 4. Segurança extra: se sair dos limites da imagem, para o traçado
+        if x < -width or x > 2*width or y < -height or y > 2*height:
+            break
 
 
 def connect_points_image(points: List[Tuple[int, int]], height: int, width: int, value: int = 255) -> List[List[int]]:
