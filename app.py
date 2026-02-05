@@ -10,6 +10,10 @@ from PIL import Image, ImageTk
 # Importa seus algoritmos como módulos locais (execução direta do app.py)
 from box_filter import box_filter
 from canny import canny
+from freeman import boundary_to_image
+from freeman import connect_points_image
+from freeman import largest_component_mask
+from freeman import subsample_boundary
 from freeman import freeman_chain_code
 from marr_hildreth import marr_hildreth
 from otsu import count_objects, otsu_threshold
@@ -234,8 +238,26 @@ class PIDApp(tk.Tk):
         control.pack(fill="x", pady=5)
         ttk.Button(control, text="Carregar e Processar", command=self._run_freeman).pack(side="left", padx=5)
 
-        self.freeman_original = ImagePanel(frame, "Binária Base")
-        self.freeman_original.pack(side="left", expand=True, fill="both", padx=5)
+        images_frame = ttk.Frame(frame)
+        images_frame.pack(fill="both", expand=True)
+
+        row_top = ttk.Frame(images_frame)
+        row_top.pack(fill="both", expand=True)
+        row_bottom = ttk.Frame(images_frame)
+        row_bottom.pack(fill="both", expand=True)
+
+        self.freeman_panels = []
+        for label in [
+            "(a) Original/ruidosa",
+            "(b) Suavizada (Box 9x9)",
+            "(c) Limiarizada (Otsu)",
+            "(d) Fronteira maior",
+            "(e) Fronteira subamostrada",
+            "(f) Pontos conectados",
+        ]:
+            panel = ImagePanel(row_top if len(self.freeman_panels) < 3 else row_bottom, label)
+            panel.pack(side="left", expand=True, fill="both", padx=5, pady=5)
+            self.freeman_panels.append(panel)
 
         self.freeman_text = tk.Text(frame, height=10, wrap="word")
         self.freeman_text.pack(fill="both", expand=True, padx=5, pady=5)
@@ -247,17 +269,31 @@ class PIDApp(tk.Tk):
         if image is None: return
         
         def worker():
-            _, binary = otsu_threshold(image)
-            result = freeman_chain_code(binary)
-            return binary, result
+            smoothed = box_filter(image, 9)
+            _, binary = otsu_threshold(smoothed)
+            largest = largest_component_mask(binary)
+            chain_result = freeman_chain_code(largest)
+            boundary_image = boundary_to_image(chain_result.boundary, len(largest), len(largest[0]))
+            subsampled = subsample_boundary(chain_result.boundary, max(1, len(chain_result.boundary) // 60))
+            subsampled_image = boundary_to_image(subsampled, len(largest), len(largest[0]))
+            connected_image = connect_points_image(subsampled, len(largest), len(largest[0]))
+            return image, smoothed, binary, boundary_image, subsampled_image, connected_image, chain_result
 
         def update_ui(result):
-            binary, chain_result = result
-            self.freeman_original.update_image(grayscale_to_image(binary))
+            original, smoothed, binary, boundary_img, subsampled_img, connected_img, chain_result = result
+            images = [
+                original,
+                smoothed,
+                binary,
+                boundary_img,
+                subsampled_img,
+                connected_img,
+            ]
+            for panel, img in zip(self.freeman_panels, images):
+                panel.update_image(grayscale_to_image(img))
 
             if not chain_result.chain:
                 txt = "Nenhum objeto detectado ou objeto sem contorno fechado encontrado."
-            
             else:
                 chain_text = "".join(map(str, chain_result.chain))
                 normalized_text = "".join(map(str, chain_result.normalized_chain))

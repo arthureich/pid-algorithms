@@ -4,6 +4,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Tuple
 
+from otsu import connected_components
+from utils import zeros
+
 
 @dataclass
 class FreemanChainResult:
@@ -13,6 +16,7 @@ class FreemanChainResult:
     circular_first_difference: List[int]
     boundary: List[Tuple[int, int]]
     start_point: Tuple[int, int] | None
+    component_mask: List[List[int]] | None
 
 
 
@@ -88,6 +92,7 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
             circular_first_difference=[],
             boundary=[],
             start_point=None,
+            component_mask=None,
         )
 
     c0 = (start[0], start[1] - 1)
@@ -100,6 +105,7 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
             circular_first_difference=[],
             boundary=[start],
             start_point=start,
+            component_mask=None,
         )
     b1, c1 = first_step
     boundary = [start, b1]
@@ -152,7 +158,7 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
             k = 0
         start_idx = min(i, j)
         return doubled[start_idx:start_idx + n]
-
+    
     normalized_chain = minimal_rotation(chain)
 
     def first_difference(sequence: List[int]) -> List[int]:
@@ -175,4 +181,72 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
         circular_first_difference=circular_first_diff,
         boundary=boundary,
         start_point=start,
+        component_mask=None,
     )
+
+def largest_component_mask(binary: List[List[int]]) -> List[List[int]]:
+    labels, count = connected_components(binary)
+    if count == 0:
+        return zeros(len(binary), len(binary[0]), 0)
+    height = len(binary)
+    width = len(binary[0])
+    sizes = [0 for _ in range(count + 1)]
+    for y in range(height):
+        for x in range(width):
+            label = labels[y][x]
+            if label > 0:
+                sizes[label] += 1
+    largest_label = max(range(1, count + 1), key=lambda idx: sizes[idx])
+    mask = zeros(height, width, 0)
+    for y in range(height):
+        for x in range(width):
+            if labels[y][x] == largest_label:
+                mask[y][x] = 255
+    return mask
+
+
+def boundary_to_image(boundary: List[Tuple[int, int]], height: int, width: int, value: int = 255) -> List[List[int]]:
+    image = zeros(height, width, 0)
+    for y, x in boundary:
+        if 0 <= y < height and 0 <= x < width:
+            image[y][x] = value
+    return image
+
+
+def subsample_boundary(boundary: List[Tuple[int, int]], step: int) -> List[Tuple[int, int]]:
+    if step <= 1:
+        return boundary[:]
+    return boundary[::step]
+
+
+def _draw_line(image: List[List[int]], start: Tuple[int, int], end: Tuple[int, int], value: int) -> None:
+    y0, x0 = start
+    y1, x1 = end
+    dy = abs(y1 - y0)
+    dx = abs(x1 - x0)
+    sy = 1 if y0 < y1 else -1
+    sx = 1 if x0 < x1 else -1
+    err = dx - dy
+    y, x = y0, x0
+    height = len(image)
+    width = len(image[0])
+    while True:
+        if 0 <= y < height and 0 <= x < width:
+            image[y][x] = value
+        if y == y1 and x == x1:
+            e2 = 2 * err
+        if e2 > -dy:
+            err -= dy
+            x += sx
+        if e2 < dx:
+            err += dx
+            y += sy
+
+
+def connect_points_image(points: List[Tuple[int, int]], height: int, width: int, value: int = 255) -> List[List[int]]:
+    image = zeros(height, width, 0)
+    if len(points) < 2:
+        return image
+    for idx in range(1, len(points)):
+        _draw_line(image, points[idx - 1], points[idx], value)
+    return image
