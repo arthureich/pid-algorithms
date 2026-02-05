@@ -7,20 +7,16 @@ import threading
 import cv2
 from PIL import Image, ImageTk
 
-# Importa seus algoritmos (certifique-se que algorithms.py está na mesma pasta)
-from algorithms import (
-    box_filter,
-    canny,
-    comparison_text,
-    count_objects,
-    freeman_chain_code,
-    intensity_segmentation,
-    marr_hildreth,
-    otsu_threshold,
-    to_list,
-    watershed_segment,
-)
-
+# Importa seus algoritmos como módulos locais (execução direta do app.py)
+from box_filter import box_filter
+from canny import canny
+from freeman import freeman_chain_code
+from marr_hildreth import marr_hildreth
+from otsu import count_objects, otsu_threshold
+from segmentation import intensity_segmentation
+from text import comparison_text
+from utils import to_list
+from watershed import watershed_segment
 # Constante para limitar o tamanho da imagem e acelerar o processamento (opcional)
 MAX_DIMENSION = 600 
 
@@ -252,17 +248,41 @@ class PIDApp(tk.Tk):
         
         def worker():
             _, binary = otsu_threshold(image)
-            chain = freeman_chain_code(binary)
-            return binary, chain
+            result = freeman_chain_code(binary)
+            return binary, result
 
         def update_ui(result):
-            binary, chain = result
+            binary, chain_result = result
             self.freeman_original.update_image(grayscale_to_image(binary))
-            
-            txt = f"Total de elos na cadeia: {len(chain)}\n\nCódigo:\n" + ", ".join(map(str, chain))
-            if len(chain) == 0:
+
+            if not chain_result.chain:
                 txt = "Nenhum objeto detectado ou objeto sem contorno fechado encontrado."
             
+            else:
+                chain_text = "".join(map(str, chain_result.chain))
+                normalized_text = "".join(map(str, chain_result.normalized_chain))
+                first_diff_text = "".join(map(str, chain_result.first_difference))
+                circular_diff_text = "".join(map(str, chain_result.circular_first_difference))
+                start_text = (
+                    f"({chain_result.start_point[0]}, {chain_result.start_point[1]})"
+                    if chain_result.start_point
+                    else "-"
+                )
+                txt = (
+                    "Seguidor de fronteira (Moore):\n"
+                    f"Ponto inicial b0 (topo-esquerda): {start_text}\n"
+                    f"Total de pontos na fronteira: {len(chain_result.boundary)}\n"
+                    f"Total de elos na cadeia: {len(chain_result.chain)}\n\n"
+                    "Cadeia de Freeman (bruta):\n"
+                    f"{chain_text}\n\n"
+                    "Cadeia normalizada (menor inteiro por rotação):\n"
+                    f"{normalized_text}\n\n"
+                    "1ª diferença (invariante à rotação):\n"
+                    f"{first_diff_text}\n\n"
+                    "1ª diferença circular:\n"
+                    f"{circular_diff_text}"
+                )
+
             self.freeman_text.configure(state="normal")
             self.freeman_text.delete("1.0", tk.END)
             self.freeman_text.insert("1.0", txt)
@@ -339,3 +359,4 @@ class PIDApp(tk.Tk):
 if __name__ == "__main__":
     app = PIDApp()
     app.mainloop()
+
