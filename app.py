@@ -101,9 +101,9 @@ class PIDApp(tk.Tk):
         Executa worker_func em uma thread separada.
         Quando terminar, chama update_func na thread principal com o resultado.
         """
-        self.config(cursor="watch") # Cursor de 'carregando'
-        self.status_var.set("Processando... Aguarde (pode demorar em Python puro)...")
-        self.update_idletasks() # Força atualização da UI
+        self.config(cursor="watch") 
+        self.status_var.set("Processando...")
+        self.update_idletasks() 
 
         def thread_target():
             try:
@@ -240,8 +240,18 @@ class PIDApp(tk.Tk):
         control = ttk.Frame(tab_frame)
         control.pack(fill="x", pady=5)
         ttk.Button(control, text="Carregar e Processar", command=self._run_freeman).pack(side="left", padx=5)
+        ttk.Label(control, text="Subamostragem do grid (px):").pack(side="left", padx=(15, 2))
+        self.grid_step_var = tk.IntVar(value=20)
 
-        # --- INÍCIO DA LÓGICA DE SCROLL ---
+        spin = ttk.Spinbox(
+            control, 
+            from_=5, 
+            to=100, 
+            textvariable=self.grid_step_var, 
+            width=5,
+            increment=5 
+        )
+        spin.pack(side="left", padx=2)
         
         # 3. Container para o Canvas e a Barra de Rolagem
         container = ttk.Frame(tab_frame)
@@ -264,9 +274,10 @@ class PIDApp(tk.Tk):
 
         # Cria a janela dentro do canvas apontando para o frame
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        
-        # Conecta o canvas à barra de rolagem
         canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
 
         # Posiciona Canvas e Scrollbar
         canvas.pack(side="left", fill="both", expand=True)
@@ -275,13 +286,7 @@ class PIDApp(tk.Tk):
         # (Opcional) Habilita scroll com a roda do mouse (Windows/Linux)
         def _on_mousewheel(event):
             canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        
-        # Liga o evento de scroll quando o mouse entra no canvas
         canvas.bind_all("<MouseWheel>", _on_mousewheel)
-
-        # --- FIM DA LÓGICA DE SCROLL ---
-
-        # Agora adicionamos tudo dentro de 'scrollable_frame' em vez de 'tab_frame'
         
         images_frame = ttk.Frame(scrollable_frame)
         images_frame.pack(fill="both", expand=True)
@@ -296,27 +301,27 @@ class PIDApp(tk.Tk):
             "(a) Original/ruidosa",
             "(b) Suavizada (Box 9x9)",
             "(c) Limiarizada (Otsu)",
-            "(d) Fronteira maior",
+            "(d) Fronteira maior (Moore)",
             "(e) Fronteira subamostrada",
             "(f) Pontos conectados",
         ]
         
         for i, label in enumerate(labels):
-            # Coloca os 3 primeiros na linha de cima, os outros na de baixo
             parent = row_top if i < 3 else row_bottom
             panel = ImagePanel(parent, label)
             panel.pack(side="left", expand=True, fill="both", padx=5, pady=5)
             self.freeman_panels.append(panel)
 
-        self.freeman_text = tk.Text(scrollable_frame, height=12, wrap="word") # Aumentei um pouco a altura do texto
+        self.freeman_text = tk.Text(scrollable_frame, height=14, wrap="word") 
         self.freeman_text.pack(fill="both", expand=True, padx=5, pady=5)
-        self.freeman_text.insert("1.0", "Carregue uma imagem para gerar a cadeia.")
+        self.freeman_text.insert("1.0", "Selecione o tamanho do grid e carregue uma imagem.")
         self.freeman_text.configure(state="disabled")
 
     def _run_freeman(self) -> None:
         image = self._load_image()
         if image is None: return
-        
+        current_grid_step = self.grid_step_var.get()
+
         def progress(message: str) -> None:
             def apply_message() -> None:
                 self.status_var.set(message)
@@ -329,21 +334,15 @@ class PIDApp(tk.Tk):
             _, binary = otsu_threshold(smoothed)
             largest = largest_component_mask(binary)
             raw_result = freeman_chain_code(largest)
-            progress("Freeman: preparando imagens de saída...")
             boundary_image = boundary_to_image(raw_result.boundary, len(largest), len(largest[0]))
-            progress("Freeman: preparando 1")
-            subsampled = subsample_boundary(raw_result.boundary, max(1, len(raw_result.boundary) // 60))
-            simplified = subsample_boundary_grid(raw_result.boundary, 15)
+            simplified = subsample_boundary_grid(raw_result.boundary, current_grid_step)
             short_chain = get_freeman_from_points(simplified)
-            progress("Freeman: preparando 2")
             subsampled_image = boundary_to_image(simplified, len(largest), len(largest[0]))
-            progress("Freeman: preparando 3")
             connected_image = connect_points_image(simplified, len(largest), len(largest[0]))
-            progress("Freeman: preparado")
-            return image, smoothed, binary, boundary_image, subsampled_image, connected_image, raw_result, short_chain, simplified, 15
+            return image, smoothed, binary, boundary_image, subsampled_image, connected_image, raw_result, short_chain, simplified, current_grid_step
 
         def update_ui(result):
-            original, smoothed, binary, boundary_img, subsampled_img, connected_img, raw_result, short_chain, sparse_points, grid_size = result
+            original, smoothed, binary, boundary_img, subsampled_img, connected_img, raw_result, short_chain, sparse_points, step_used = result
             images = [original, smoothed, binary, boundary_img, subsampled_img, connected_img]
             for panel, img in zip(self.freeman_panels, images):
                 panel.update_image(grayscale_to_image(img))
@@ -352,7 +351,7 @@ class PIDApp(tk.Tk):
                 txt = "Nenhum objeto detectado ou objeto sem contorno fechado encontrado."
             else:
                 chain_text = "".join(map(str, raw_result.chain))
-                normalized_text = "".join(map(str, raw_result.normalized_chain))
+                short_chain_str = "".join(map(str, short_chain)) if short_chain else "N/A"
                 first_diff_text = "".join(map(str, raw_result.first_difference))
                 circular_diff_text = "".join(map(str, raw_result.circular_first_difference))
                 start_text = (
@@ -362,20 +361,15 @@ class PIDApp(tk.Tk):
                 )
                 txt = (
                     "Seguidor de fronteira (Moore):\n"
-                    f"Ponto inicial b0 (topo-esquerda): {start_text}\n"
+                    f"Ponto inicial b0 (topo-meio): {start_text}\n"
                     f"Pontos Resumidos (Grade): {len(sparse_points)}\n\n"
                     f"Total de pontos na fronteira: {len(raw_result.boundary)}\n"
-                    f"Total de elos na cadeia: {len(raw_result.chain)}\n\n"
                     "Cadeia de Freeman (bruta):\n"
                     f"{chain_text}\n\n"
                     f"CADEIA DE FREEMAN (Simplificada):\n"
                     f"{short_chain}\n\n"
-                    "Cadeia normalizada (menor inteiro por rotação):\n"
-                    f"{normalized_text}\n\n"
                     "1ª diferença (invariante à rotação):\n"
                     f"{first_diff_text}\n\n"
-                    "1ª diferença circular:\n"
-                    f"{circular_diff_text}"
                 )
 
             self.freeman_text.configure(state="normal")
