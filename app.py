@@ -1,4 +1,3 @@
-"""Interface gráfica com Threading para evitar congelamento."""
 from __future__ import annotations
 
 import tkinter as tk
@@ -6,8 +5,6 @@ from tkinter import filedialog, ttk
 import threading
 import cv2
 from PIL import Image, ImageTk
-
-# Importa seus algoritmos como módulos locais (execução direta do app.py)
 from box_filter import box_filter
 from canny import canny
 from freeman import boundary_to_image, subsample_boundary_grid, connect_points_image
@@ -18,7 +15,7 @@ from segmentation import intensity_segmentation
 from text import comparison_text
 from utils import to_list
 from watershed import watershed_segment
-# Constante para limitar o tamanho da imagem e acelerar o processamento (opcional)
+# Limitar o tamanho da imagem e acelerar o processamento 
 MAX_DIMENSION = 600 
 
 def resize_if_needed(image):
@@ -72,7 +69,6 @@ class PIDApp(tk.Tk):
         self._build_box_tab()
         self._build_segmentation_tab()
         
-        # Barra de status
         self.status_var = tk.StringVar(value="Pronto.")
         self.status_bar = ttk.Label(self, textvariable=self.status_var, relief=tk.SUNKEN, anchor="w")
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
@@ -95,7 +91,7 @@ class PIDApp(tk.Tk):
         
         return to_list(image)
 
-    # --- UTILITÁRIO DE THREADING ---
+    # --- UTHREADING ---
     def _run_async(self, worker_func, update_func):
         """
         Executa worker_func em uma thread separada.
@@ -107,21 +103,21 @@ class PIDApp(tk.Tk):
 
         def thread_target():
             try:
-                print("Iniciando Worker...") # Debug no console
+                print("Iniciando Worker...") 
                 result = worker_func()
                 print("Worker finalizado com sucesso.")
                 self.after(0, lambda: self._on_process_complete(update_func, result))
             except Exception as e:
                 import traceback
-                traceback.print_exc() # Isso vai mostrar exatamente ONDE o código parou no seu terminal
+                traceback.print_exc() 
                 self.after(0, lambda err=e: self._on_process_error(err))
 
         threading.Thread(target=thread_target, daemon=True).start()
 
     def _on_process_complete(self, update_func, result):
-        self.config(cursor="") # Restaura cursor
+        self.config(cursor="") 
         self.status_var.set("Concluído.")
-        update_func(result) # Atualiza a tela
+        update_func(result) 
 
     def _on_process_error(self, error):
         self.config(cursor="")
@@ -139,11 +135,10 @@ class PIDApp(tk.Tk):
         action_frame.pack(side="left", padx=5)
         ttk.Button(action_frame, text="Carregar e Processar", command=self._run_edges).pack(side="top", pady=2)
 
-        # --- GRUPO MARR-HILDRETH ---
+        # --- MARR-HILDRETH ---
         mh_group = ttk.LabelFrame(control_frame, text="Marr-Hildreth")
         mh_group.pack(side="left", padx=5, fill="y")
 
-        # Layout em Grid para ficar compacto
         ttk.Label(mh_group, text="Sigma:").grid(row=0, column=0, sticky="e")
         self.mh_sigma = tk.DoubleVar(value=1.4)
         ttk.Entry(mh_group, textvariable=self.mh_sigma, width=5).grid(row=0, column=1)
@@ -157,11 +152,10 @@ class PIDApp(tk.Tk):
         ttk.Spinbox(mh_group, from_=0, to=51, increment=2, textvariable=self.mh_kernel, width=5).grid(row=1, column=1)
         ttk.Label(mh_group, text="(0=Auto)").grid(row=1, column=2, columnspan=2, sticky="w")
 
-        # --- GRUPO CANNY ---
+        # --- CANNY ---
         canny_group = ttk.LabelFrame(control_frame, text="Canny")
         canny_group.pack(side="left", padx=5, fill="y")
 
-        # Sigma e Kernel
         ttk.Label(canny_group, text="Sigma:").grid(row=0, column=0, sticky="e")
         self.canny_sigma = tk.DoubleVar(value=1.0)
         ttk.Entry(canny_group, textvariable=self.canny_sigma, width=5).grid(row=0, column=1)
@@ -170,16 +164,14 @@ class PIDApp(tk.Tk):
         self.canny_kernel = tk.IntVar(value=5)
         ttk.Spinbox(canny_group, from_=3, to=31, increment=2, textvariable=self.canny_kernel, width=5).grid(row=0, column=3)
 
-        # Thresholds (Ratios)
         ttk.Label(canny_group, text="T High:").grid(row=1, column=0, sticky="e")
-        self.canny_th_high = tk.DoubleVar(value=0.15) # 15% do max
+        self.canny_th_high = tk.DoubleVar(value=0.15) 
         ttk.Entry(canny_group, textvariable=self.canny_th_high, width=5).grid(row=1, column=1)
 
         ttk.Label(canny_group, text="T Low:").grid(row=1, column=2, sticky="e")
-        self.canny_th_low = tk.DoubleVar(value=0.05) # 5% do max
+        self.canny_th_low = tk.DoubleVar(value=0.05) 
         ttk.Entry(canny_group, textvariable=self.canny_th_low, width=5).grid(row=1, column=3)
         
-        # --- PAINÉIS DE IMAGEM ---
         panels = ttk.Frame(frame)
         panels.pack(fill="both", expand=True)
         
@@ -199,13 +191,13 @@ class PIDApp(tk.Tk):
         image = self._load_image()
         if image is None: return
 
-        # Recupera parâmetros Marr-Hildreth
+        # Parâmetros Marr-Hildreth
         try:
             mh_s = self.mh_sigma.get()
             mh_t = self.mh_threshold.get()
             mh_k = self.mh_kernel.get()
             
-            # Recupera parâmetros Canny
+            # Parâmetros Canny
             cn_s = self.canny_sigma.get()
             cn_k = self.canny_kernel.get()
             cn_th = self.canny_th_high.get()
@@ -217,7 +209,6 @@ class PIDApp(tk.Tk):
         
         self.edge_original.update_image(grayscale_to_image(image))
 
-        # Atualiza labels
         k_mh_text = "Auto" if mh_k == 0 else f"{mh_k}x{mh_k}"
         self.edge_marr.configure(text=f"Marr-Hildreth\n(σ={mh_s}, Th={mh_t}, K={k_mh_text})")
         self.edge_canny.configure(text=f"Canny\n(σ={cn_s}, K={cn_k}x{cn_k}, H={cn_th}, L={cn_tl})")
@@ -225,7 +216,6 @@ class PIDApp(tk.Tk):
         def worker():
             marr = marr_hildreth(image, sigma=mh_s, threshold=mh_t, kernel_size=mh_k).edges
             
-            # Chama o Canny atualizado
             cny = canny(
                 image, 
                 sigma=cn_s, 
@@ -247,14 +237,11 @@ class PIDApp(tk.Tk):
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="3: Otsu + Contagem")
 
-        # Área de controle
         control = ttk.Frame(frame)
         control.pack(fill="x", pady=5)
         
-        # Botão Apenas Carrega a Imagem
         ttk.Button(control, text="Carregar Imagem", command=self._load_otsu_image).pack(side="left", padx=5)
         
-        # --- NOVO SLIDER (SCALE) ---
         ttk.Label(control, text="Threshold (0=Auto):").pack(side="left", padx=(15, 2))
         
         self.otsu_scale_var = tk.IntVar(value=0)
@@ -265,15 +252,13 @@ class PIDApp(tk.Tk):
             orient=tk.HORIZONTAL, 
             variable=self.otsu_scale_var,
             length=200,
-            command=self._on_otsu_slider_change # Chama função ao mover
+            command=self._on_otsu_slider_change 
         )
         self.otsu_scale.pack(side="left", padx=5)
 
-        # Label de Contagem
         self.otsu_label = ttk.Label(control, text="Objetos: -", font=("Arial", 12, "bold"))
         self.otsu_label.pack(side="left", padx=20)
 
-        # Painéis de Imagem
         panels = ttk.Frame(frame)
         panels.pack(fill="both", expand=True)
         
@@ -282,9 +267,8 @@ class PIDApp(tk.Tk):
         self.otsu_original.pack(side="left", expand=True, fill="both", padx=5)
         self.otsu_binary.pack(side="left", expand=True, fill="both", padx=5)
         
-        # Variável para armazenar a imagem carregada na memória
         self.otsu_cached_image = None
-        self.otsu_timer = None # Para o debounce
+        self.otsu_timer = None 
 
     def _load_otsu_image(self) -> None:
         """Carrega a imagem do disco e guarda em self.otsu_cached_image"""
@@ -294,10 +278,8 @@ class PIDApp(tk.Tk):
         self.otsu_cached_image = image
         self.otsu_original.update_image(grayscale_to_image(image))
         
-        # Reseta o slider para 0 (Auto) ao carregar nova imagem
         self.otsu_scale.set(0)
         
-        # Dispara o processamento inicial
         self._update_otsu_processing()
 
     def _on_otsu_slider_change(self, event=None):
@@ -305,28 +287,22 @@ class PIDApp(tk.Tk):
         if self.otsu_cached_image is None:
             return
 
-        # Cancela agendamento anterior se o usuário ainda estiver arrastando
         if self.otsu_timer:
             self.after_cancel(self.otsu_timer)
         
-        # Agenda o processamento para daqui a 150ms (Debounce)
-        # Isso evita calcular 100 vezes se você arrastar rápido
         self.otsu_timer = self.after(150, self._update_otsu_processing)
 
     def _update_otsu_processing(self) -> None:
-        """Lógica real de processamento (roda na Thread)"""
+        """Lógica de processamento (roda na Thread)"""
         if self.otsu_cached_image is None: 
             return
             
-        # Pega o valor atual do slider
         manual_val = self.otsu_scale_var.get()
-        image = self.otsu_cached_image # Pega da memória
+        image = self.otsu_cached_image 
 
         def worker():
-            # 1. Aplica Otsu (Auto ou Manual dependendo do valor)
             th_used, binary = otsu_threshold(image, manual_threshold=manual_val)
             
-            # --- CORREÇÃO DE INVERSÃO (Fundo Branco) ---
             h = len(binary)
             w = len(binary[0])
             corners = [binary[0][0], binary[0][w-1], binary[h-1][0], binary[h-1][w-1]]
@@ -353,54 +329,43 @@ class PIDApp(tk.Tk):
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="4: Watershed")
 
-        # 1. Controles no topo (fixos, não rolam)
         control = ttk.Frame(frame)
         control.pack(fill="x", pady=5)
         ttk.Button(control, text="Carregar e Processar", command=self._run_watershed).pack(side="left", padx=5)
 
-        # 2. Container para Scrollbars e Canvas
         container = ttk.Frame(frame)
         container.pack(fill="both", expand=True)
 
-        # Canvas e Scrollbars
         canvas = tk.Canvas(container)
         v_scroll = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
         h_scroll = ttk.Scrollbar(container, orient="horizontal", command=canvas.xview)
         
-        # Frame interno que vai conter as imagens (este é o que rola)
         self.ws_scroll_frame = ttk.Frame(canvas)
 
-        # Configuração de rolagem
         self.ws_scroll_frame.bind(
             "<Configure>",
             lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
         
-        # Cria a janela dentro do canvas
         canvas.create_window((0, 0), window=self.ws_scroll_frame, anchor="nw")
         canvas.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
 
-        # Posicionamento (Grid é melhor para scrollbars bi-direcionais)
         canvas.grid(row=0, column=0, sticky="nsew")
         v_scroll.grid(row=0, column=1, sticky="ns")
         h_scroll.grid(row=1, column=0, sticky="ew")
         
-        # Faz o canvas expandir
         container.grid_rowconfigure(0, weight=1)
         container.grid_columnconfigure(0, weight=1)
 
-        # Habilita scroll com mouse (opcional)
         def _on_mousewheel(event):
             canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         canvas.bind_all("<MouseWheel>", _on_mousewheel)
 
-        # 3. Painéis de Imagem (dentro do frame rolável)
         self.ws_original = ImagePanel(self.ws_scroll_frame, "1. Original")
         self.ws_dist = ImagePanel(self.ws_scroll_frame, "2. Distância")
         self.ws_markers = ImagePanel(self.ws_scroll_frame, "3. Marcadores")
         self.ws_result = ImagePanel(self.ws_scroll_frame, "4. Watershed Final")
         
-        # Empacota lado a lado com espaço
         for p in (self.ws_original, self.ws_dist, self.ws_markers, self.ws_result):
             p.pack(side="left", padx=10, pady=10)
 
@@ -410,29 +375,23 @@ class PIDApp(tk.Tk):
         self.ws_original.update_image(grayscale_to_image(image))
 
         def worker():
-            # A função agora retorna 3 coisas: Resultado, Distância e Marcadores
+            # Resultado, Distância e Marcadores
             return watershed_segment(image)
 
         def update_ui(result):
-            # Desempacota os 3 resultados
             final_img, dist_img, markers_img = result
             
-            # Atualiza cada painel com o tipo correto de conversor
-            # Distância é grayscale (lista de ints)
             self.ws_dist.update_image(grayscale_to_image(dist_img))
             
-            # Marcadores e Resultado são RGB (lista de tuplas)
             self.ws_markers.update_image(rgb_to_image(markers_img))
             self.ws_result.update_image(rgb_to_image(final_img))
 
         self._run_async(worker, update_ui)
 
     def _build_freeman_tab(self) -> None:
-        # 1. Cria o frame principal da aba
         tab_frame = ttk.Frame(self.notebook)
         self.notebook.add(tab_frame, text="5: Cadeia de Freeman")
 
-        # 2. Área de Controle (Botões) - Fixa no topo
         control = ttk.Frame(tab_frame)
         control.pack(fill="x", pady=5)
         ttk.Button(control, text="Carregar e Processar", command=self._run_freeman).pack(side="left", padx=5)
@@ -449,37 +408,29 @@ class PIDApp(tk.Tk):
         )
         spin.pack(side="left", padx=2)
         
-        # 3. Container para o Canvas e a Barra de Rolagem
         container = ttk.Frame(tab_frame)
         container.pack(fill="both", expand=True)
 
-        # Canvas onde o conteúdo será desenhado
         canvas = tk.Canvas(container)
         
-        # Barra de rolagem vertical ligada ao Canvas
         scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
         
-        # Frame interno que ficará "dentro" do Canvas (é aqui que colocamos os widgets)
         scrollable_frame = ttk.Frame(canvas)
 
-        # Configura o scrollable_frame para atualizar a área de rolagem quando mudar de tamanho
         scrollable_frame.bind(
             "<Configure>",
             lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
 
-        # Cria a janela dentro do canvas apontando para o frame
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
 
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-        # Posiciona Canvas e Scrollbar
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
-        # (Opcional) Habilita scroll com a roda do mouse (Windows/Linux)
         def _on_mousewheel(event):
             canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         canvas.bind_all("<MouseWheel>", _on_mousewheel)
@@ -564,7 +515,7 @@ class PIDApp(tk.Tk):
                     f"{chain_text}\n\n"
                     f"CADEIA DE FREEMAN (Simplificada):\n"
                     f"{short_chain}\n\n"
-                    "1ª diferença (invariante à rotação):\n"
+                    "1ª diferença:\n"
                     f"{first_diff_text}\n\n"
                 )
 
@@ -606,14 +557,12 @@ class PIDApp(tk.Tk):
             h, w = len(image), len(image[0])
 
             sizes = [2, 3, 5, 7]
-            # Verifica a resolução da imagem. Se a imagem for muito grande (ex: > 1200px),
-            # o ruído é muito fino em relação aos pixels, então filtros pequenos (3x3, 5x5)
-            # tornam-se imperceptíveis. Neste caso, optamos por usar kernels maiores
-            # para garantir que a suavização seja visível.
+            # Verifica a resolução da imagem. Se a imagem for muito grande, o ruído é muito
+            # fino em relação aos pixels, então filtros pequenos tornam-se imperceptíveis. 
+            # Neste caso, usa kernels maiores para garantir que a suavização seja visível.
             is_large = max(h, w) > 1200
             
             if is_large:
-                # Kernels grandes para imagens > 1200px
                 sizes = [9, 15, 25, 35]
             
             results = []
@@ -625,7 +574,7 @@ class PIDApp(tk.Tk):
         def update_ui(payload):
             results, sizes, is_large = payload
             if is_large:
-                self.box_info_label.configure(text="Imagem Grande detectada: Usando filtros maiores (9, 15, 25, 35).", foreground="blue")
+                self.box_info_label.configure(text="Imagem grande detectada: Usando filtros maiores (9, 15, 25, 35).", foreground="blue")
             else:
                 self.box_info_label.configure(text="Imagem Padrão: Usando filtros normais (2, 3, 5, 7).", foreground="black")
             for i, res in enumerate(results):

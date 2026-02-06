@@ -1,40 +1,30 @@
 """
-Watershed Controlado por Marcadores (Baseado em Transformada de Distância).
-
-REFERÊNCIA GERAL DO ALGORITMO:
+REFERENCIAL TEÓRICO:
 Esta implementação segue a abordagem híbrida de segmentação morfológica descrita por:
-[1] Beucher, S. "The Watershed Transformation applied to image segmentation", Scanning Microscopy International, 1992.
-    - Introduziu o conceito de "Watershed Controlado por Marcadores" para evitar a super-segmentação.
+[1] PAZOTI, M. A., BRUNO, O. M. . "Aplicação da transformada watershed no processo de separação de objetos". 2004.
 [2] Gonzalez, R. C., & Woods, R. E. "Digital Image Processing".
     - Capítulo sobre Segmentação Morfológica: descreve o uso da Transformada de Distância como
       superfície topográfica para separar objetos convexos sobrepostos.
 """
+
 from __future__ import annotations
 
 from typing import List, Tuple
 from collections import deque
 import heapq
 import random
-
 from otsu import otsu_threshold, connected_components
 from utils import zeros
 
 def manual_distance_transform(binary: List[List[int]]) -> List[List[int]]:
     """
-    Calcula a Transformada de Distância (Distance Transform) via propagação (BFS).
-
-    REFERENCIAL TEÓRICO:
-    [1] Rosenfeld, A., & Pfaltz, J. L. (1968). "Distance functions on digital pictures". 
-        Pattern Recognition, 1(1), 33-61.
+    Calcula a Transformada de Distância via propagação (BFS).
     
-    EXPLICAÇÃO:
+    ALGORITMO:
     A Transformada de Distância converte uma imagem binária em uma imagem em tons de cinza, 
-    onde o valor de cada pixel representa a distância Euclidiana (ou Manhattan/Chessboard, 
-    dependendo da métrica) até o pixel de fundo (zero) mais próximo.
+    onde o valor de cada pixel representa a distância Euclidiana até o pixel de fundo mais próximo.
     
-    Neste algoritmo, ela é fundamental pois cria o "relevo topográfico". O centro dos objetos
-    terá os valores mais altos (picos), servindo como as "bacias profundas" onde a água (labels)
-    começará a subir.
+    O centro dos objetos terá os valores mais altos, servindo como as "bacias profundas" onde os labels começarão a subir.
     """
     height = len(binary)
     width = len(binary[0])
@@ -48,7 +38,7 @@ def manual_distance_transform(binary: List[List[int]]) -> List[List[int]]:
                 dist[y][x] = 0
                 queue.append((y, x))
     
-    # Métrica: Manhattan (4-conectado) para eficiência em Python puro
+    # Métrica: Manhattan (4-conectado) 
     neighbors = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
     # Algoritmo de Grassfire / Breadth-First Search (BFS)
@@ -67,25 +57,12 @@ def find_markers(dist_map: List[List[int]], threshold: int = 3) -> Tuple[List[Li
     """
     Extrai os Marcadores (Sementes) baseando-se nos máximos regionais da distância.
 
-    REFERENCIAL TEÓRICO:
-    [1] Beucher, S., & Meyer, F. (1993). "The morphological approach to segmentation: 
-        The watershed transformation". Mathematical Morphology in Image Processing.
-    [2] Soille, P. (2013). "Morphological image analysis: principles and applications". Springer.
-
-    EXPLICAÇÃO:
-    O algoritmo Watershed puro tende a "super-segmentar" (oversegmentation) devido a ruídos locais.
-    Para corrigir isso, Beucher introduziu o conceito de "Marcadores".
-    
-    Esta função identifica os "picos" da transformada de distância (os centros dos objetos).
-    Utilizamos a técnica de Componentes Conexos (Rosenfeld et al., 1966) nos picos para garantir 
-    que um topo plano (plateau) seja considerado apenas UM marcador, e não vários pixels isolados,
-    garantindo que cada objeto receba apenas uma cor/rótulo final.
+    Esta função identifica os "picos" da transformada de distância.
     """
     height = len(dist_map)
     width = len(dist_map[0])
     
-    # 1. Limiarização Regional (H-maxima transform simplificada)
-    # Identifica regiões que são picos locais significativos
+    # 1. Limiarização Regional. Identifica regiões que são picos locais significativos
     peaks_binary = zeros(height, width, 0)
     
     for y in range(1, height - 1):
@@ -104,8 +81,7 @@ def find_markers(dist_map: List[List[int]], threshold: int = 3) -> Tuple[List[Li
             if is_max:
                 peaks_binary[y][x] = 255
 
-    # 2. Rotulação de Componentes Conexos
-    # Agrupa pixels vizinhos de pico em um único marcador (Label único)
+    # 2. Rotulação de Componentes Conexos. Agrupa pixels vizinhos de pico em um único label
     markers, count = connected_components(peaks_binary)
     
     return markers, count
@@ -116,18 +92,12 @@ def watershed_segment(image: List[List[int]]) -> Tuple[
     List[List[Tuple[int, int, int]]]  
 ]:
     """
-    Executa a Segmentação Watershed por Imersão Controlada.
+    Executa a Segmentação Watershed 
 
-    REFERENCIAL TEÓRICO:
-    [1] Vincent, L., & Soille, P. (1991). "Watersheds in digital spaces: an efficient algorithm 
-        based on immersion simulations". IEEE Transactions on Pattern Analysis and Machine Intelligence.
-    [2] Otsu, N. (1979). "A threshold selection method from gray-level histograms".
-
-    EXPLICAÇÃO:
     Esta função orquestra o pipeline completo:
-    1. Otsu (1979): Separa o Foreground do Background.
-    2. Distance Transform (1968): Cria a topografia onde o centro do objeto é o ponto mais fundo.
-    3. Marker Extraction (1992): Define onde a "água" começa a subir.
+    1. Otsu: Separa o Foreground do Background.
+    2. Distance Transform: Cria a topografia onde o centro do objeto é o ponto mais fundo.
+    3. Marker Extraction: Define onde a "água" começa a subir.
     4. Immersion Simulation (Vincent & Soille, 1991): Simula a inundação usando uma 
        Fila de Prioridade (Heap). A água sobe dos marcadores (distância máxima) para as bordas.
        Onde águas de marcadores diferentes se encontram, constrói-se uma linha de divisão (Dam).
@@ -142,7 +112,7 @@ def watershed_segment(image: List[List[int]]) -> Tuple[
     if corners.count(255) >= 3:
          binary = [[255 - val for val in row] for row in binary]
 
-    # 2. Transformada de Distância (Rosenfeld & Pfaltz - 1968)
+    # 2. Transformada de Distância 
     dist_map = manual_distance_transform(binary)
 
     # Visualização auxiliar da Distância
@@ -158,8 +128,7 @@ def watershed_segment(image: List[List[int]]) -> Tuple[
             row_vis.append(val)
         dist_visual.append(row_vis)
 
-    # 3. Extração de Marcadores (Beucher - 1992)
-    # Threshold=5 ajustado empiricamente para evitar ruídos pequenos
+    # 3. Extração de Marcadores 
     markers, num_markers = find_markers(dist_map, threshold=5) 
 
     # Visualização auxiliar dos Marcadores
@@ -173,12 +142,11 @@ def watershed_segment(image: List[List[int]]) -> Tuple[
                 row_vis.append((0, 0, 0))
         markers_visual.append(row_vis)
     
-    # 4. Simulação de Imersão (Vincent & Soille - 1991)
+    # 4. Simulação de Imersão 
     labels = [[0 for _ in range(w)] for _ in range(h)]
     pq = []
     
     # Inicializa a Fila de Prioridade com os Marcadores
-    # Usamos -dist_map para simular Max-Heap com a biblioteca heapq (que é Min-Heap)
     # Isso garante que processamos do centro do objeto (maior distância) para fora.
     for y in range(h):
         for x in range(w):
@@ -202,7 +170,6 @@ def watershed_segment(image: List[List[int]]) -> Tuple[
         
         if labels[y][x] != 0: continue
             
-        # Votação de vizinhos: Quem está inundando este pixel?
         adj_labels = []
         for dy, dx in neighbors:
             ny, nx = y + dy, x + dx
@@ -236,11 +203,11 @@ def watershed_segment(image: List[List[int]]) -> Tuple[
         for x in range(w):
             lbl = labels[y][x]
             if lbl > 0:
-                row.append(colors[lbl]) # Objeto segmentado
+                row.append(colors[lbl]) 
             elif lbl == 0 and binary[y][x] != 0: 
-                row.append((255, 0, 0)) # Linha de Divisão (Vermelho)
+                row.append((255, 0, 0)) 
             else:
-                row.append((0, 0, 0))   # Fundo
+                row.append((0, 0, 0))   
         result_img.append(row)
         
     return result_img, dist_visual, markers_visual

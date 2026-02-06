@@ -1,4 +1,3 @@
-"""Image processing algorithms for the PID assignment (pixel-by-pixel)."""
 from __future__ import annotations
 
 from .box_filter import box_filter

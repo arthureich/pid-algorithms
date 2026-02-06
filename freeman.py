@@ -1,10 +1,6 @@
 """
-Freeman Chain Code Extraction & Boundary Simplification.
-
-REFERENCIAL TEÓRICO GERAL:
-[1] Freeman, H. (1961). "On the encoding of arbitrary geometric configurations". 
-    IRE Transactions on Electronic Computers, EC-10(2), 260-268.
-[2] Gonzalez, R. C., & Woods, R. E. "Digital Image Processing". 
+REFERENCIAL TEÓRICO:
+[1] Gonzalez, R. C., & Woods, R. E. "Digital Image Processing". 
     (Capítulo 11: Representation and Description).
 
 RESUMO:
@@ -13,12 +9,12 @@ onde cada número denota a direção do próximo pixel da borda em relação ao 
 Para conectividade-8, usam-se códigos de 0 a 7.
 Esta técnica é fundamental para compressão de dados de forma e análise de descritores (área, perímetro, curvatura).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 import math
 from typing import List, Tuple
-
 from otsu import connected_components
 from utils import zeros
 
@@ -38,10 +34,6 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
     """
     Extrai o contorno usando o algoritmo de Moore-Neighbor Tracing e gera a Cadeia de Freeman.
 
-    REFERENCIAL TEÓRICO (Extração de Fronteira):
-    [1] Moore, E. F. (1968). "The firing squad synchronization problem".
-    
-    EXPLICAÇÃO:
     Para gerar a cadeia, primeiro precisamos ordenar os pixels da borda.
     O algoritmo "Moore-Neighbor Tracing" funciona assim:
     1. Encontre um pixel inicial de borda (start).
@@ -54,7 +46,7 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
     height = len(binary)
     width = len(binary[0])
 
-    # Direções para conectividade-8 (Freeman)
+    # Direções para conectividade-8 
     freeman_directions = [
         (0, 1),   # 0: Leste
         (-1, 1),  # 1: Nordeste
@@ -68,7 +60,7 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
     # Mapeia deslocamento (dy, dx) -> Código (0-7)
     offset_to_code = {offset: idx for idx, offset in enumerate(freeman_directions)}
     
-    # Offsets para varredura horária (Moore Tracing)
+    # Offsets para o Moore Tracing
     clockwise_offsets = [
         (0, -1),   # Oeste
         (-1, -1),  # Noroeste
@@ -97,9 +89,9 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
     def next_boundary_point(b: Tuple[int, int], c: Tuple[int, int]) -> Tuple[Tuple[int, int], Tuple[int, int]] | None:
         """Encontra o próximo pixel da borda usando varredura horária (Moore)."""
         by, bx = b
-        cy, cx = c # 'c' é o pixel de background anterior (referência)
+        cy, cx = c 
         
-        # Começa a busca a partir da direção de onde viemos
+        # Começa a busca a partir da direção de onde veio
         offset = (cy - by, cx - bx)
         try:
             start_index = clockwise_offsets.index(offset)
@@ -129,11 +121,10 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
     if start is None:
         return FreemanChainResult([], [], [], [], [], None, None)
 
-    # 2. Rastreamento (Tracing)
-    c0 = (start[0], start[1] - 1) # Vizinho oeste (assumindo varredura esq->dir)
+    # 2. Tracing
+    c0 = (start[0], start[1] - 1) 
     first_step = next_boundary_point(start, c0)
     if first_step is None:
-        # Objeto de um único pixel
         return FreemanChainResult([], [], [], [], [start], start, None)
         
     b1, c1 = first_step
@@ -141,7 +132,7 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
     b = b1
     c = c1
     
-    # Limite de segurança para evitar loops infinitos em topologias complexas
+    # Limite para evitar loops infinitos 
     max_steps = height * width * 4 
     steps = 0
     
@@ -168,7 +159,7 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
             continue
         chain.append(code)
 
-    # 4. Normalização (Mínimo Inteiro) - Torna o código invariante ao ponto de partida
+    # 4. Normalização - Torna o código invariante ao ponto de partida
     def minimal_rotation(sequence: List[int]) -> List[int]:
         if not sequence: return []
         doubled = sequence * 2
@@ -199,7 +190,6 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
         if len(sequence) < 2: return []
         diffs = []
         for i in range(1, len(sequence)):
-            # Número de passos em sentido anti-horário entre direções adjacentes
             diffs.append((sequence[i] - sequence[i - 1]) % 8)
         return diffs
 
@@ -255,7 +245,7 @@ def subsample_boundary(boundary: List[Tuple[int, int]], step: int) -> List[Tuple
         return boundary[:]
     return boundary[::step]
 
-# --- ALGORITMOS DE SIMPLIFICAÇÃO POLIGONAL ---
+# --- ALGORITMO DE SIMPLIFICAÇÃO ---
 
 def _perpendicular_distance(point: Tuple[int, int], start: Tuple[int, int], end: Tuple[int, int]) -> float:
     """Calcula a distância perpendicular de um ponto a uma reta."""
@@ -274,8 +264,7 @@ def _rdp(points: List[Tuple[int, int]], epsilon: float) -> List[Tuple[int, int]]
     Algoritmo Ramer-Douglas-Peucker (RDP).
     
     REFERENCIAL TEÓRICO:
-    [1] Ramer, U. (1972). "An iterative procedure for the polygonal approximation of plane curves".
-    [2] Douglas, D. H., & Peucker, T. K. (1973). "Algorithms for the reduction of the number of 
+    [1] Douglas, D. H., & Peucker, T. K. (1973). "Algorithms for the reduction of the number of 
         points required to represent a digitized line or its caricature".
 
     EXPLICAÇÃO:
@@ -370,15 +359,8 @@ def get_freeman_from_points(points: List[Tuple[int, int]]) -> List[int]:
 
 def _draw_line(image: List[List[int]], start: Tuple[int, int], end: Tuple[int, int], value: int) -> None:
     """
-    Algoritmo de Linha de Bresenham.
-    
-    REFERENCIAL TEÓRICO:
-    [1] Bresenham, J. E. (1965). "Algorithm for computer control of a digital plotter".
-        IBM Systems Journal, 4(1), 25-30.
-        
-    EXPLICAÇÃO:
-    Algoritmo incremental para rasterização de linhas que utiliza apenas aritmética inteira (somas e subtrações),
-    sendo extremamente eficiente para conectar os pontos da fronteira simplificada.
+    Algoritmo incremental para rasterização de linhas que utiliza apenas aritmética inteira 
+    (somas e subtrações), usado para conectar os pontos da fronteira simplificada.
     """
     y0, x0 = start
     y1, x1 = end
@@ -416,7 +398,7 @@ def connect_points_image(
     value: int = 255,
     close: bool = True,
 ) -> List[List[int]]:
-    """Conecta uma lista de pontos com linhas retas (Visualização do Polígono)."""
+    """Conecta uma lista de pontos com linhas retas (Polígono)."""
     image = zeros(height, width, 0)
     if len(points) < 2:
         return image

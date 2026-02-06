@@ -1,15 +1,13 @@
 """
-Marr-Hildreth Edge Detection (Laplacian of Gaussian).
-
-REFERENCIAL TEÓRICO GERAL:
+REFERENCIAL TEÓRICO:
 [1] Marr, D., & Hildreth, E. (1980). "Theory of edge detection". 
-    Proceedings of the Royal Society of London. Series B. Biological Sciences, 207(1167), 187-217.
+    Proceedings of the Royal Society of London. Series B. Biological Sciences.
 
 RESUMO:
 Este algoritmo propõe que as bordas de intensidade em uma imagem são melhor detectadas procurando
 por cruzamentos de zero (zero-crossings) na segunda derivada da imagem suavizada.
 A combinação da suavização Gaussiana com o operador Laplaciano resulta no filtro LoG (Laplacian of Gaussian),
-que serve como um detector de bordas passa-banda sintonizável pelo parâmetro Sigma.
+que serve como um detector de bordas passa-banda pelo Sigma.
 """
 from __future__ import annotations
 
@@ -22,18 +20,14 @@ def zero_crossing(response: List[List[float]], threshold: float) -> List[List[in
     """
     Detecta os cruzamentos por zero na imagem de resposta do Laplaciano.
 
-    REFERENCIAL TEÓRICO:
-    [1] Marr, D., & Hildreth, E. (1980). "Theory of edge detection".
-    [2] Haralick, R. M. (1984). "Digital step edges from zero crossing of second directional derivatives".
-
-    EXPLICAÇÃO:
-    Matematicamente, uma borda (mudança abrupta de intensidade) corresponde a um pico na primeira derivada
+    ALGORITMO:
+    Uma borda (mudança abrupta de intensidade) corresponde a um pico na primeira derivada
     (gradiente) e a um cruzamento por zero na segunda derivada (Laplaciano).
     
-    Esta função varre a imagem procurando por mudanças de sinal (+ para - ou vice-versa) entre pixels
+    Esta função varre a imagem procurando por mudanças de sinal entre pixels
     vizinhos opostos (horizontal, vertical e diagonais). 
     
-    O parâmetro 'threshold' é crucial para rejeitar "falsos cruzamentos" causados por ruído em regiões
+    O parâmetro 'threshold' é usado para rejeitar "falsos cruzamentos" causados por ruído em regiões
     uniformes da imagem. Apenas cruzamentos com uma magnitude (diferença de valor) significativa são aceitos.
     """
     height = len(response)
@@ -115,7 +109,7 @@ def marr_hildreth(
     3. Detecção de Zero-Crossing no resultado.
     """
     
-    # 1. Definição do Tamanho do Kernel (Regra empírica: 6*sigma cobre ~99% da gaussiana)
+    # 1. Definição do Tamanho do Kernel 
     if kernel_size > 0:
         # Se o usuário definiu um tamanho, forçamos que seja ímpar para ter centro exato
         final_size = kernel_size if kernel_size % 2 != 0 else kernel_size + 1
@@ -127,13 +121,12 @@ def marr_hildreth(
     log = log_kernel(final_size, sigma)
     
     # 2. Aplica Convolução (LoG)
-    # O resultado conterá valores positivos e negativos.
     log_response = convolve2d(image, log)
     
     # 3. Aplica a detecção de bordas (Cruzamento por Zero)
     edges = zero_crossing(log_response, threshold)
     
-    # 4. Gera Magnitude (apenas para visualização, pois o LoG original tem sinal)
+    # 4. Gera Magnitude 
     magnitude = [[abs(val) for val in row] for row in log_response]
     
     return EdgeResults(magnitude=magnitude, edges=edges)

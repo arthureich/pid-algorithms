@@ -1,8 +1,19 @@
+"""
+REFERENCIAL TEÓRICO:
+[1] Gonzalez, R. C., & Woods, R. E. "Digital Image Processing". 
+    (Capítulo 3: Spatial Filtering).
+
+RESUMO:
+Este módulo implementa as operações matemáticas de baixo nível essenciais para PDI:
+1. Convolução Discreta 2D.
+2. Geração de Kernels (Máscaras): Gaussiana (suavização) e LoG (detecção de bordas).
+3. Operadores de Gradiente: Sobel (derivadas parciais).
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import List, Tuple
-
 import math
 
 
@@ -13,6 +24,7 @@ class EdgeResults:
 
 
 def to_list(image) -> List[List[int]]:
+    """Converte array numpy para lista de listas."""
     return [[int(pixel) for pixel in row] for row in image.tolist()]
 
 
@@ -21,6 +33,13 @@ def zeros(height: int, width: int, value: int = 0) -> List[List[int]]:
 
 
 def convolve2d(image: List[List[int]], kernel: List[List[float]]) -> List[List[float]]:
+    """
+    Para uma imagem f(x,y) e um kernel w(s,t) de tamanho m x n:
+    g(x,y) = sum_{s} sum_{t} f(x-s, y-t) * w(s,t)
+    
+    Centralizamos o kernel sobre o pixel (x,y) e calculamos a soma ponderada dos vizinhos.
+    O código trata as bordas repetindo o pixel da extremidade.
+    """
     height = len(image)
     width = len(image[0])
     k_h = len(kernel)
@@ -58,6 +77,13 @@ def convolve2d(image: List[List[int]], kernel: List[List[float]]) -> List[List[f
 
 
 def gaussian_kernel(size: int, sigma: float) -> List[List[float]]:
+    """
+    Baseado na função densidade de probabilidade Gaussiana 2D:
+    G(x,y) = (1 / 2*pi*sigma^2) * exp(-(x^2 + y^2) / 2*sigma^2)
+    
+    Este filtro funciona como um filtro passa-baixa ideal para suavização, pois é o único
+    filtro separável que possui simetria rotacional e decaimento suave nos domínios espacial e frequência.
+    """
     ax = [i - size // 2 for i in range(size)]
     kernel: List[List[float]] = []
     total = 0.0
@@ -75,6 +101,12 @@ def gaussian_kernel(size: int, sigma: float) -> List[List[float]]:
 
 
 def log_kernel(size: int, sigma: float) -> List[List[float]]:
+    """
+    Representa a segunda derivada espacial da função Gaussiana.
+    LoG(x,y) = -[1 - (x^2+y^2)/2sigma^2] * exp(...)
+    
+    É usado no detector de bordas de Marr-Hildreth para encontrar cruzamentos por zero.
+    """
     ax = [i - size // 2 for i in range(size)]
     kernel: List[List[float]] = []
     values: List[float] = []
@@ -94,6 +126,9 @@ def log_kernel(size: int, sigma: float) -> List[List[float]]:
 
 
 def sobel_gradients(image: List[List[int]]) -> Tuple[List[List[float]], List[List[float]]]:
+    """
+    Aplica dois kernels (kx, ky) para aproximar as derivadas parciais df/dx e df/dy.
+    """
     kx = [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]
     ky = [[1, 2, 1], [0, 0, 0], [-1, -2, -1]]
     gx = convolve2d(image, kx)

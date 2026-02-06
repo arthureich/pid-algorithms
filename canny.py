@@ -1,13 +1,9 @@
 """
-Canny Edge Detection.
-
-REFERENCIAL TEÓRICO GERAL:
+REFERENCIAL TEÓRICO:
 [1] Canny, J. (1986). "A Computational Approach to Edge Detection". 
-    IEEE Transactions on Pattern Analysis and Machine Intelligence, 8(6), 679-698.
+    IEEE Transactions on Pattern Analysis and Machine Intelligence.
 
-RESUMO:
-O detector de bordas de Canny é um algoritmo multi-estágio projetado para ser um detector de bordas "ótimo".
-Seus objetivos principais são:
+Objetivos:
 1. Baixa taxa de erro: Todas as bordas devem ser encontradas e não deve haver respostas falsas.
 2. Boa localização: A distância entre os pontos de borda encontrados e a borda real deve ser mínima.
 3. Resposta única: Uma borda real não deve resultar em múltiplos pixels de borda (bordas finas).
@@ -15,9 +11,7 @@ Seus objetivos principais são:
 from __future__ import annotations
 
 from typing import List
-
 import math
-
 from utils import EdgeResults, convolve2d, gaussian_kernel, sobel_gradients, zeros
 
 
@@ -28,10 +22,6 @@ def non_maximum_suppression(
     """
     Aplica a Supressão de Não-Máximos (Non-Maximum Suppression - NMS).
 
-    REFERENCIAL TEÓRICO:
-    [1] Canny, J. (1986). Seção IV-A.
-    
-    EXPLICAÇÃO:
     Este passo é responsável por "afinar" as bordas. O operador Sobel gera bordas grossas e borradas.
     O NMS verifica, para cada pixel, se a sua magnitude é um máximo local na direção do gradiente.
     
@@ -77,17 +67,11 @@ def non_maximum_suppression(
 
 def hysteresis_threshold(image: List[List[float]], low: float, high: float) -> List[List[int]]:
     """
-    Aplica a Limiarização por Histerese (Hysteresis Thresholding).
-
-    REFERENCIAL TEÓRICO:
-    [1] Canny, J. (1986). Seção IV-B.
-
-    EXPLICAÇÃO:
     Resolve o problema de bordas quebradas (streaking) comum em limiarização simples.
     Utiliza dois limiares (T_high e T_low):
     
-    1. Bordas Fortes (Strong): Pixels > T_high. São aceitos imediatamente como borda final.
-    2. Bordas Fracas (Weak): Pixels entre T_low e T_high. São candidatos.
+    1. Bordas Fortes: Pixels > T_high. São aceitos imediatamente como borda final.
+    2. Bordas Fracas: Pixels entre T_low e T_high. São candidatos.
     3. Ruído: Pixels < T_low são descartados.
     
     Conectividade: Uma "Borda Fraca" só é promovida a "Borda Forte" se estiver conectada 
@@ -107,12 +91,11 @@ def hysteresis_threshold(image: List[List[float]], low: float, high: float) -> L
             value = image[y][x]
             if value >= high:
                 result[y][x] = strong
-                stack.append((y, x)) # Adiciona fortes à pilha para rastrear conexões
+                stack.append((y, x)) 
             elif value >= low:
                 result[y][x] = weak
     
-    # Fase 2: Rastreamento de bordas (Conectividade)
-    # Usa DFS (Pilha) para seguir as bordas fracas conectadas às fortes
+    # Fase 2: Rastreamento de bordas 
     while stack:
         y, x = stack.pop()
         for dy in (-1, 0, 1):
@@ -146,11 +129,10 @@ def canny(
     1. Suavização Gaussiana (Redução de Ruído).
     2. Cálculo do Gradiente (Sobel) para obter Magnitude e Direção.
     3. Supressão de Não-Máximos (Afinamento).
-    4. Limiarização por Histerese (Conexão).
+    4. Limiarização.
     """
     
-    # 1. Suavização Gaussiana com parâmetros dinâmicos
-    # Canny enfatiza que o ruído deve ser filtrado antes da detecção.
+    # 1. Suavização Gaussiana 
     blurred = convolve2d(image, gaussian_kernel(kernel_size, sigma))
     
     # 2. Gradientes Sobel
@@ -167,7 +149,6 @@ def canny(
         for x in range(width):
             mag = math.hypot(gx[y][x], gy[y][x])
             magnitude[y][x] = mag
-            # Ângulo do gradiente (direção da máxima variação)
             angle[y][x] = math.degrees(math.atan2(gy[y][x], gx[y][x]))
             if mag > max_mag:
                 max_mag = mag
@@ -175,7 +156,7 @@ def canny(
     if max_mag == 0:
         max_mag = 1.0
         
-    # Normalização da magnitude para 0-255 (para visualização e consistência)
+    # Normalização da magnitude para 0-255 
     for y in range(height):
         for x in range(width):
             magnitude[y][x] = magnitude[y][x] / max_mag * 255
