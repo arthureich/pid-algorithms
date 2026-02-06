@@ -10,11 +10,8 @@ from PIL import Image, ImageTk
 # Importa seus algoritmos como módulos locais (execução direta do app.py)
 from box_filter import box_filter
 from canny import canny
-from freeman import boundary_to_image
-from freeman import connect_points_image
-from freeman import largest_component_mask
-from freeman import subsample_boundary
-from freeman import freeman_chain_code
+from freeman import boundary_to_image, subsample_boundary_grid, connect_points_image
+from freeman import largest_component_mask, subsample_boundary, freeman_chain_code, get_freeman_from_points
 from marr_hildreth import marr_hildreth
 from otsu import count_objects, otsu_threshold
 from segmentation import intensity_segmentation
@@ -328,57 +325,51 @@ class PIDApp(tk.Tk):
             self.after(0, apply_message)
 
         def worker():
-            progress("Freeman: suavizando (Box 9x9)...")
             smoothed = box_filter(image, 9)
-            progress("Freeman: limiarizando (Otsu)...")
             _, binary = otsu_threshold(smoothed)
-            progress("Freeman: buscando maior componente...")
             largest = largest_component_mask(binary)
-            progress("Freeman: extraindo fronteira...")
-            chain_result = freeman_chain_code(largest)
+            raw_result = freeman_chain_code(largest)
             progress("Freeman: preparando imagens de saída...")
-            boundary_image = boundary_to_image(chain_result.boundary, len(largest), len(largest[0]))
+            boundary_image = boundary_to_image(raw_result.boundary, len(largest), len(largest[0]))
             progress("Freeman: preparando 1")
-            subsampled = subsample_boundary(chain_result.boundary, max(1, len(chain_result.boundary) // 60))
+            subsampled = subsample_boundary(raw_result.boundary, max(1, len(raw_result.boundary) // 60))
+            simplified = subsample_boundary_grid(raw_result.boundary, 15)
+            short_chain = get_freeman_from_points(simplified)
             progress("Freeman: preparando 2")
-            subsampled_image = boundary_to_image(subsampled, len(largest), len(largest[0]))
+            subsampled_image = boundary_to_image(simplified, len(largest), len(largest[0]))
             progress("Freeman: preparando 3")
-            connected_image = connect_points_image(subsampled, len(largest), len(largest[0]))
+            connected_image = connect_points_image(simplified, len(largest), len(largest[0]))
             progress("Freeman: preparado")
-            return image, smoothed, binary, boundary_image, subsampled_image, connected_image, chain_result
+            return image, smoothed, binary, boundary_image, subsampled_image, connected_image, raw_result, short_chain, simplified, 15
 
         def update_ui(result):
-            original, smoothed, binary, boundary_img, subsampled_img, connected_img, chain_result = result
-            images = [
-                original,
-                smoothed,
-                binary,
-                boundary_img,
-                subsampled_img,
-                connected_img,
-            ]
+            original, smoothed, binary, boundary_img, subsampled_img, connected_img, raw_result, short_chain, sparse_points, grid_size = result
+            images = [original, smoothed, binary, boundary_img, subsampled_img, connected_img]
             for panel, img in zip(self.freeman_panels, images):
                 panel.update_image(grayscale_to_image(img))
 
-            if not chain_result.chain:
+            if not raw_result.chain:
                 txt = "Nenhum objeto detectado ou objeto sem contorno fechado encontrado."
             else:
-                chain_text = "".join(map(str, chain_result.chain))
-                normalized_text = "".join(map(str, chain_result.normalized_chain))
-                first_diff_text = "".join(map(str, chain_result.first_difference))
-                circular_diff_text = "".join(map(str, chain_result.circular_first_difference))
+                chain_text = "".join(map(str, raw_result.chain))
+                normalized_text = "".join(map(str, raw_result.normalized_chain))
+                first_diff_text = "".join(map(str, raw_result.first_difference))
+                circular_diff_text = "".join(map(str, raw_result.circular_first_difference))
                 start_text = (
-                    f"({chain_result.start_point[0]}, {chain_result.start_point[1]})"
-                    if chain_result.start_point
+                    f"({raw_result.start_point[0]}, {raw_result.start_point[1]})"
+                    if raw_result.start_point
                     else "-"
                 )
                 txt = (
                     "Seguidor de fronteira (Moore):\n"
                     f"Ponto inicial b0 (topo-esquerda): {start_text}\n"
-                    f"Total de pontos na fronteira: {len(chain_result.boundary)}\n"
-                    f"Total de elos na cadeia: {len(chain_result.chain)}\n\n"
+                    f"Pontos Resumidos (Grade): {len(sparse_points)}\n\n"
+                    f"Total de pontos na fronteira: {len(raw_result.boundary)}\n"
+                    f"Total de elos na cadeia: {len(raw_result.chain)}\n\n"
                     "Cadeia de Freeman (bruta):\n"
                     f"{chain_text}\n\n"
+                    f"CADEIA DE FREEMAN (Simplificada):\n"
+                    f"{short_chain}\n\n"
                     "Cadeia normalizada (menor inteiro por rotação):\n"
                     f"{normalized_text}\n\n"
                     "1ª diferença (invariante à rotação):\n"

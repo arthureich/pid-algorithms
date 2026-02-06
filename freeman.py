@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import List, Tuple
 
 from otsu import connected_components
@@ -218,6 +219,134 @@ def subsample_boundary(boundary: List[Tuple[int, int]], step: int) -> List[Tuple
         return boundary[:]
     return boundary[::step]
 
+def _perpendicular_distance(
+    point: Tuple[int, int],
+    start: Tuple[int, int],
+    end: Tuple[int, int],
+) -> float:
+    """Calcula a distância de um ponto até a reta formada por start-end."""
+    if start == end:
+        return math.sqrt((point[0] - start[0]) ** 2 + (point[1] - start[1]) ** 2)
+    
+    y0, x0 = point
+    y1, x1 = start
+    y2, x2 = end
+    
+    # Área do triângulo * 2 / base = altura (distância perpendicular)
+    numerator = abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1)
+    denominator = math.sqrt((y2 - y1) ** 2 + (x2 - x1) ** 2)
+    
+    if denominator == 0:
+        return 0.0
+        
+    return numerator / denominator
+
+def _rdp(points: List[Tuple[int, int]], epsilon: float) -> List[Tuple[int, int]]:
+    """Função recursiva do algoritmo Ramer-Douglas-Peucker."""
+    if len(points) < 3:
+        return points[:]
+        
+    start = points[0]
+    end = points[-1]
+    max_distance = -1.0
+    index = 0
+    
+    # Acha o ponto mais distante da reta imaginária entre o inicio e o fim
+    for i in range(1, len(points) - 1):
+        distance = _perpendicular_distance(points[i], start, end)
+        if distance > max_distance:
+            index = i
+            max_distance = distance
+            
+    # Se o ponto mais distante for irrelevante (menor que epsilon), simplifica tudo numa reta só
+    if max_distance <= epsilon:
+        return [start, end]
+    
+    # Caso contrário, quebra a linha nesse ponto e repete o processo (recursão)
+    left = _rdp(points[: index + 1], epsilon)
+    right = _rdp(points[index:], epsilon)
+    
+    # Junta as duas metades (o último ponto da esquerda é igual ao primeiro da direita)
+    return left[:-1] + right
+
+def subsample_boundary_grid(boundary: List[Tuple[int, int]], step: int) -> List[Tuple[int, int]]:
+    """
+    Simula uma resolução menor (grade). Percorre a fronteira original
+    e marca um ponto apenas quando a fronteira muda de célula na grade.
+    
+    Args:
+        boundary: Lista original de pixels.
+        step: O tamanho da célula (precisão). Ex: 15 ou 20.
+    """
+    if not boundary or step <= 0:
+        return []
+
+    simplified_points = []
+    last_grid_pos = None
+
+    # Adiciona o primeiro ponto ajustado à grade
+    start_y, start_x = boundary[0]
+    # Centraliza o ponto na célula da grade para ficar bonito visualmente
+    offset = step // 2 
+    
+    for y, x in boundary:
+        # Calcula a coordenada na "Macro Grade"
+        gy = y // step
+        gx = x // step
+        
+        current_grid_pos = (gy, gx)
+
+        # Se mudou de célula na grade, registra o novo ponto
+        if current_grid_pos != last_grid_pos:
+            # Reconverte para coordenadas de pixel (escala real) para desenhar na tela
+            pixel_y = (gy * step) + offset
+            pixel_x = (gx * step) + offset
+            
+            simplified_points.append((pixel_y, pixel_x))
+            last_grid_pos = current_grid_pos
+
+    # Garante que o polígono feche (o último ponto conecta ao primeiro)
+    if len(simplified_points) > 2:
+        # Verifica se o último ponto é vizinho do primeiro na grade
+        # Se estiver muito longe, pode precisar conectar, mas geralmente o loop fecha.
+        if simplified_points[0] != simplified_points[-1]:
+             simplified_points.append(simplified_points[0])
+
+    return simplified_points
+
+
+def get_freeman_from_points(points: List[Tuple[int, int]]) -> List[int]:
+    """
+    Gera a cadeia de Freeman calculando a direção entre pontos consecutivos.
+    Como os pontos vêm da grade, as direções serão naturalmente quantizadas (0-7).
+    """
+    chain = []
+    if len(points) < 2:
+        return []
+
+    # Mapeamento de ângulos para códigos Freeman
+    # (dy, dx) -> código
+    # Nota: y cresce para baixo na imagem
+    def get_code(dy, dx):
+        angle = math.degrees(math.atan2(dy, dx))
+        if angle < 0: angle += 360
+        # Divide por 45 e arredonda para pegar o setor (0 a 7)
+        return int((angle + 22.5) // 45) % 8
+
+    for i in range(1, len(points)):
+        p_prev = points[i-1]
+        p_curr = points[i]
+        
+        dy = p_curr[0] - p_prev[0]
+        dx = p_curr[1] - p_prev[1]
+        
+        if dy == 0 and dx == 0:
+            continue
+            
+        code = get_code(dy, dx)
+        chain.append(code)
+        
+    return chain
 
 def _draw_line(image: List[List[int]], start: Tuple[int, int], end: Tuple[int, int], value: int) -> None:
     y0, x0 = start
@@ -255,11 +384,20 @@ def _draw_line(image: List[List[int]], start: Tuple[int, int], end: Tuple[int, i
         if x < -width or x > 2*width or y < -height or y > 2*height:
             break
 
-
-def connect_points_image(points: List[Tuple[int, int]], height: int, width: int, value: int = 255) -> List[List[int]]:
+def connect_points_image(
+    points: List[Tuple[int, int]],
+    height: int,
+    width: int,
+    value: int = 255,
+    close: bool = True,
+) -> List[List[int]]:
     image = zeros(height, width, 0)
     if len(points) < 2:
         return image
     for idx in range(1, len(points)):
         _draw_line(image, points[idx - 1], points[idx], value)
+    if close and len(points) > 2:
+        _draw_line(image, points[-1], points[0], value)
     return image
+
+    
