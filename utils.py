@@ -4,7 +4,7 @@ REFERENCIAL TEÓRICO:
     (Capítulo 3: Spatial Filtering).
 
 RESUMO:
-Este módulo implementa as operações matemáticas de baixo nível essenciais para PDI:
+Operações:
 1. Convolução Discreta 2D.
 2. Geração de Kernels (Máscaras): Gaussiana (suavização) e LoG (detecção de bordas).
 3. Operadores de Gradiente: Sobel (derivadas parciais).

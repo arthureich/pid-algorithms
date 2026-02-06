@@ -55,9 +55,9 @@ def manual_distance_transform(binary: List[List[int]]) -> List[List[int]]:
 
 def find_markers(dist_map: List[List[int]], threshold: int = 3) -> Tuple[List[List[int]], int]:
     """
-    Extrai os Marcadores (Sementes) baseando-se nos máximos regionais da distância.
+    Extrai os Marcadores baseando-se nos máximos regionais da distância.
 
-    Esta função identifica os "picos" da transformada de distância.
+    Identifica os "picos da transformada de distância.
     """
     height = len(dist_map)
     width = len(dist_map[0])
@@ -98,12 +98,12 @@ def watershed_segment(image: List[List[int]]) -> Tuple[
     1. Otsu: Separa o Foreground do Background.
     2. Distance Transform: Cria a topografia onde o centro do objeto é o ponto mais fundo.
     3. Marker Extraction: Define onde a "água" começa a subir.
-    4. Immersion Simulation (Vincent & Soille, 1991): Simula a inundação usando uma 
-       Fila de Prioridade (Heap). A água sobe dos marcadores (distância máxima) para as bordas.
-       Onde águas de marcadores diferentes se encontram, constrói-se uma linha de divisão (Dam).
+    4. Immersion Simulation: Simula a inundação usando uma 
+       Fila de Prioridade. A água sobe dos marcadores para as bordas.
+       Onde águas de marcadores diferentes se encontram, constrói-se uma linha de divisão.
     """
     
-    # 1. Binarização (Otsu - 1979)
+    # 1. Binarização 
     _, binary = otsu_threshold(image)
     h, w = len(binary), len(binary[0])
     
@@ -188,7 +188,7 @@ def watershed_segment(image: List[List[int]]) -> Tuple[
                     heapq.heappush(pq, (-dist_map[ny][nx], ny, nx))
         else:
             # Se há vizinhos de bacias diferentes, temos um encontro de águas.
-            # Define-se como 0 (Watershed Line / Dique)
+            # Define-se como 0 
             labels[y][x] = 0
 
     # 5. Composição da Imagem Final

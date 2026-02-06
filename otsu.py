@@ -83,11 +83,11 @@ def count_objects(binary: List[List[int]], min_area: int = 20) -> int:
         Journal of the ACM.
     
     EXPLICAÇÃO:
-    Utiliza o algoritmo de Rotulação de Componentes Conexos baseado em busca em grafo (DFS/BFS).
+    Utiliza o algoritmo de Rotulação de Componentes Conexos baseado em busca em grafo.
     
     O algoritmo varre a imagem pixel a pixel. Ao encontrar um pixel de objeto (255) não visitado,
-    inicia uma busca (neste caso, usando uma Pilha/Stack para DFS) para encontrar todos os pixels
-    vizinhos conectados. O grupo inteiro é marcado como visitado e contado como 1 objeto.
+    inicia uma busca para encontrar todos os pixels vizinhos conectados. 
+    O grupo inteiro é marcado como visitado e contado como 1 objeto.
     
     Filtro de Ruído: O parâmetro 'min_area' descarta componentes com poucos pixels, assumindo
     que são ruídos de sensor ou artefatos de binarização.
@@ -132,9 +132,6 @@ def connected_components(binary: List[List[int]]) -> Tuple[List[List[int]], int]
     """
     Rotula os componentes conexos, atribuindo um ID único para cada objeto.
 
-    REFERENCIAL TEÓRICO:
-    [1] Gonzalez, R. C., & Woods, R. E. "Digital Image Processing".
-    
     Similar à função de contagem, mas gera uma matriz de saída onde cada pixel pertencente
     a um objeto recebe um número inteiro em vez de apenas contar.
     """

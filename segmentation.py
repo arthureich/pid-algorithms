@@ -3,12 +3,9 @@ REFERENCIAL TEÓRICO:
 [1] Gonzalez, R. C., & Woods, R. E. "Digital Image Processing".
     (Capítulo 3: Intensity Transformations and Spatial Filtering).
 
-O Intensity Slicing é uma técnica de processamento pontualque destaca intervalos 
-específicos de níveis de cinza na imagem. 
-Neste caso específico, implementamos uma quantização uniforme, onde faixas contínuas 
-de brilho são mapeadas para um único valor representativo.
-Isso reduz a quantidade de informação visual, agrupando pixels de intensidades similares 
-em regiões homogêneas.
+Técnica que destaca intervalos específicos de níveis de cinza na imagem. 
+Neste caso, faixas de brilho são mapeadas para um único valor.
+Isso reduz a quantidade de informação visual, agrupando pixels de intensidades similares.
 """
 
 from __future__ import annotations

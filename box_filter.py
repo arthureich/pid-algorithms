@@ -19,10 +19,6 @@ def box_filter(image: List[List[int]], size: int) -> List[List[int]]:
     """
     Aplica um Filtro de Média (Box Filter) na imagem.
 
-    REFERENCIAL TEÓRICO:
-    [1] Gonzalez, R. C., & Woods, R. E. "Digital Image Processing".
-        Seção: Smoothing Spatial Filters (Linear Filters).
-
     ALGORITMO:
     A operação é uma convolução discreta da imagem I com um kernel K de tamanho (m x m).
     

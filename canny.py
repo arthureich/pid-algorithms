@@ -128,7 +128,7 @@ def canny(
     Passos:
     1. Suavização Gaussiana (Redução de Ruído).
     2. Cálculo do Gradiente (Sobel) para obter Magnitude e Direção.
-    3. Supressão de Não-Máximos (Afinamento).
+    3. Supressão de Não-Máximos.
     4. Limiarização.
     """
     

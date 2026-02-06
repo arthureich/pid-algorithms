@@ -36,9 +36,9 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
 
     Para gerar a cadeia, primeiro precisamos ordenar os pixels da borda.
     O algoritmo "Moore-Neighbor Tracing" funciona assim:
-    1. Encontre um pixel inicial de borda (start).
-    2. Defina uma direção de entrada (backtrack).
-    3. Varra os 8 vizinhos em sentido horário até encontrar o próximo pixel de borda (foreground).
+    1. Encontre um pixel inicial de borda.
+    2. Defina uma direção de entrada.
+    3. Varra os 8 vizinhos em sentido horário até encontrar o próximo pixel de borda.
     4. Mova-se para esse pixel e repita até voltar ao início.
     
     A sequência de movimentos (direções) forma a Cadeia de Freeman bruta.
@@ -144,7 +144,7 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
         b_next, c_next = next_step
         boundary.append(b_next)
         
-        # Critério de parada de Jacob (revisitar o início da mesma maneira)
+        # Critério de parada (revisitar o início da mesma maneira)
         if b == start and b_next == b1:
             break
         b, c = b_next, c_next
@@ -296,7 +296,7 @@ def subsample_boundary_grid(boundary: List[Tuple[int, int]], step: int) -> List[
     [1] Pavlidis, T. (1982). "Algorithms for Graphics and Image Processing".
     
     EXPLICAÇÃO:
-    Reduz a resolução espacial da curva sobrepondo uma grade grossa (tamanho 'step') sobre a imagem.
+    Reduz a resolução espacial da curva sobrepondo uma grade grossa sobre a imagem.
     Sempre que a fronteira cruza de uma célula da grade para outra, registra-se um vértice.
     Isso gera uma versão "pixelada" em baixa resolução do contorno, ideal para gerar 
     Cadeias de Freeman curtas e representativas.
