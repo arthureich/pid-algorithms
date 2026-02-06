@@ -1,4 +1,18 @@
-"""Freeman chain code extraction."""
+"""
+Freeman Chain Code Extraction & Boundary Simplification.
+
+REFERENCIAL TEÓRICO GERAL:
+[1] Freeman, H. (1961). "On the encoding of arbitrary geometric configurations". 
+    IRE Transactions on Electronic Computers, EC-10(2), 260-268.
+[2] Gonzalez, R. C., & Woods, R. E. "Digital Image Processing". 
+    (Capítulo 11: Representation and Description).
+
+RESUMO:
+O Código de Cadeia de Freeman representa um contorno como uma sequência de números inteiros,
+onde cada número denota a direção do próximo pixel da borda em relação ao atual.
+Para conectividade-8, usam-se códigos de 0 a 7.
+Esta técnica é fundamental para compressão de dados de forma e análise de descritores (área, perímetro, curvatura).
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -20,11 +34,27 @@ class FreemanChainResult:
     component_mask: List[List[int]] | None
 
 
-
 def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
+    """
+    Extrai o contorno usando o algoritmo de Moore-Neighbor Tracing e gera a Cadeia de Freeman.
+
+    REFERENCIAL TEÓRICO (Extração de Fronteira):
+    [1] Moore, E. F. (1968). "The firing squad synchronization problem".
+    
+    EXPLICAÇÃO:
+    Para gerar a cadeia, primeiro precisamos ordenar os pixels da borda.
+    O algoritmo "Moore-Neighbor Tracing" funciona assim:
+    1. Encontre um pixel inicial de borda (start).
+    2. Defina uma direção de entrada (backtrack).
+    3. Varra os 8 vizinhos em sentido horário até encontrar o próximo pixel de borda (foreground).
+    4. Mova-se para esse pixel e repita até voltar ao início.
+    
+    A sequência de movimentos (direções) forma a Cadeia de Freeman bruta.
+    """
     height = len(binary)
     width = len(binary[0])
 
+    # Direções para conectividade-8 (Freeman)
     freeman_directions = [
         (0, 1),   # 0: Leste
         (-1, 1),  # 1: Nordeste
@@ -35,7 +65,10 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
         (1, 0),   # 6: Sul
         (1, 1),   # 7: Sudeste
     ]
+    # Mapeia deslocamento (dy, dx) -> Código (0-7)
     offset_to_code = {offset: idx for idx, offset in enumerate(freeman_directions)}
+    
+    # Offsets para varredura horária (Moore Tracing)
     clockwise_offsets = [
         (0, -1),   # Oeste
         (-1, -1),  # Noroeste
@@ -51,8 +84,10 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
         return 0 <= y < height and 0 <= x < width and binary[y][x] != 0
 
     def is_border(y: int, x: int) -> bool:
+        """Verifica se um pixel de foreground tem pelo menos um vizinho de fundo (4-vizinhos)."""
         if not is_foreground(y, x):
             return False
+        # Checagem simplificada de borda
         for dy, dx in clockwise_offsets:
             ny, nx = y + dy, x + dx
             if not is_foreground(ny, nx):
@@ -60,14 +95,19 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
         return False
 
     def next_boundary_point(b: Tuple[int, int], c: Tuple[int, int]) -> Tuple[Tuple[int, int], Tuple[int, int]] | None:
+        """Encontra o próximo pixel da borda usando varredura horária (Moore)."""
         by, bx = b
-        cy, cx = c
+        cy, cx = c # 'c' é o pixel de background anterior (referência)
+        
+        # Começa a busca a partir da direção de onde viemos
         offset = (cy - by, cx - bx)
         try:
             start_index = clockwise_offsets.index(offset)
         except ValueError:
             start_index = 0
+            
         previous = c
+        # Tenta os 8 vizinhos em sentido horário
         for i in range(1, 9):
             dy, dx = clockwise_offsets[(start_index + i) % 8]
             ny, nx = by + dy, bx + dx
@@ -76,6 +116,7 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
             previous = (ny, nx)
         return None
 
+    # 1. Encontra ponto inicial
     start: Tuple[int, int] | None = None
     for y in range(height):
         for x in range(width):
@@ -86,34 +127,24 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
             break
 
     if start is None:
-        return FreemanChainResult(
-            chain=[],
-            normalized_chain=[],
-            first_difference=[],
-            circular_first_difference=[],
-            boundary=[],
-            start_point=None,
-            component_mask=None,
-        )
+        return FreemanChainResult([], [], [], [], [], None, None)
 
-    c0 = (start[0], start[1] - 1)
+    # 2. Rastreamento (Tracing)
+    c0 = (start[0], start[1] - 1) # Vizinho oeste (assumindo varredura esq->dir)
     first_step = next_boundary_point(start, c0)
     if first_step is None:
-        return FreemanChainResult(
-            chain=[],
-            normalized_chain=[],
-            first_difference=[],
-            circular_first_difference=[],
-            boundary=[start],
-            start_point=start,
-            component_mask=None,
-        )
+        # Objeto de um único pixel
+        return FreemanChainResult([], [], [], [], [start], start, None)
+        
     b1, c1 = first_step
     boundary = [start, b1]
     b = b1
     c = c1
-    max_steps = height * width * 4
+    
+    # Limite de segurança para evitar loops infinitos em topologias complexas
+    max_steps = height * width * 4 
     steps = 0
+    
     while steps < max_steps:
         steps += 1
         next_step = next_boundary_point(b, c)
@@ -121,10 +152,13 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
             break
         b_next, c_next = next_step
         boundary.append(b_next)
+        
+        # Critério de parada de Jacob (revisitar o início da mesma maneira)
         if b == start and b_next == b1:
             break
         b, c = b_next, c_next
 
+    # 3. Conversão para Códigos de Cadeia
     chain: List[int] = []
     for i in range(1, len(boundary)):
         dy = boundary[i][0] - boundary[i - 1][0]
@@ -134,9 +168,9 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
             continue
         chain.append(code)
 
+    # 4. Normalização (Mínimo Inteiro) - Torna o código invariante ao ponto de partida
     def minimal_rotation(sequence: List[int]) -> List[int]:
-        if not sequence:
-            return []
+        if not sequence: return []
         doubled = sequence * 2
         n = len(sequence)
         i = 0
@@ -150,23 +184,22 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
                 continue
             if a > b_val:
                 i = i + k + 1
-                if i <= j:
-                    i = j + 1
+                if i <= j: i = j + 1
             else:
                 j = j + k + 1
-                if j <= i:
-                    j = i + 1
+                if j <= i: j = i + 1
             k = 0
         start_idx = min(i, j)
         return doubled[start_idx:start_idx + n]
     
     normalized_chain = minimal_rotation(chain)
 
+    # 5. Primeira Diferença - Torna o código invariante à rotação
     def first_difference(sequence: List[int]) -> List[int]:
-        if len(sequence) < 2:
-            return []
+        if len(sequence) < 2: return []
         diffs = []
         for i in range(1, len(sequence)):
+            # Número de passos em sentido anti-horário entre direções adjacentes
             diffs.append((sequence[i] - sequence[i - 1]) % 8)
         return diffs
 
@@ -186,6 +219,7 @@ def freeman_chain_code(binary: List[List[int]]) -> FreemanChainResult:
     )
 
 def largest_component_mask(binary: List[List[int]]) -> List[List[int]]:
+    """Retorna uma máscara contendo apenas o maior objeto conexo."""
     labels, count = connected_components(binary)
     if count == 0:
         return zeros(len(binary), len(binary[0]), 0)
@@ -207,6 +241,7 @@ def largest_component_mask(binary: List[List[int]]) -> List[List[int]]:
 
 
 def boundary_to_image(boundary: List[Tuple[int, int]], height: int, width: int, value: int = 255) -> List[List[int]]:
+    """Plota os pontos da fronteira em uma imagem preta."""
     image = zeros(height, width, 0)
     for y, x in boundary:
         if 0 <= y < height and 0 <= x < width:
@@ -215,100 +250,91 @@ def boundary_to_image(boundary: List[Tuple[int, int]], height: int, width: int, 
 
 
 def subsample_boundary(boundary: List[Tuple[int, int]], step: int) -> List[Tuple[int, int]]:
+    """Subamostragem simples (pula 'step' pixels)."""
     if step <= 1:
         return boundary[:]
     return boundary[::step]
 
-def _perpendicular_distance(
-    point: Tuple[int, int],
-    start: Tuple[int, int],
-    end: Tuple[int, int],
-) -> float:
-    """Calcula a distância de um ponto até a reta formada por start-end."""
+# --- ALGORITMOS DE SIMPLIFICAÇÃO POLIGONAL ---
+
+def _perpendicular_distance(point: Tuple[int, int], start: Tuple[int, int], end: Tuple[int, int]) -> float:
+    """Calcula a distância perpendicular de um ponto a uma reta."""
     if start == end:
         return math.sqrt((point[0] - start[0]) ** 2 + (point[1] - start[1]) ** 2)
-    
     y0, x0 = point
     y1, x1 = start
     y2, x2 = end
-    
-    # Área do triângulo * 2 / base = altura (distância perpendicular)
     numerator = abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1)
     denominator = math.sqrt((y2 - y1) ** 2 + (x2 - x1) ** 2)
-    
-    if denominator == 0:
-        return 0.0
-        
+    if denominator == 0: return 0.0
     return numerator / denominator
 
 def _rdp(points: List[Tuple[int, int]], epsilon: float) -> List[Tuple[int, int]]:
-    """Função recursiva do algoritmo Ramer-Douglas-Peucker."""
-    if len(points) < 3:
-        return points[:]
-        
+    """
+    Algoritmo Ramer-Douglas-Peucker (RDP).
+    
+    REFERENCIAL TEÓRICO:
+    [1] Ramer, U. (1972). "An iterative procedure for the polygonal approximation of plane curves".
+    [2] Douglas, D. H., & Peucker, T. K. (1973). "Algorithms for the reduction of the number of 
+        points required to represent a digitized line or its caricature".
+
+    EXPLICAÇÃO:
+    Reduz o número de pontos de uma curva aproximando-a por uma série de segmentos de reta,
+    mantendo a distorção abaixo de um limite (epsilon).
+    É uma abordagem recursiva que encontra o ponto mais distante da corda e divide a curva ali.
+    """
+    if len(points) < 3: return points[:]
     start = points[0]
     end = points[-1]
     max_distance = -1.0
     index = 0
-    
-    # Acha o ponto mais distante da reta imaginária entre o inicio e o fim
     for i in range(1, len(points) - 1):
         distance = _perpendicular_distance(points[i], start, end)
         if distance > max_distance:
             index = i
             max_distance = distance
-            
-    # Se o ponto mais distante for irrelevante (menor que epsilon), simplifica tudo numa reta só
     if max_distance <= epsilon:
         return [start, end]
-    
-    # Caso contrário, quebra a linha nesse ponto e repete o processo (recursão)
     left = _rdp(points[: index + 1], epsilon)
     right = _rdp(points[index:], epsilon)
-    
-    # Junta as duas metades (o último ponto da esquerda é igual ao primeiro da direita)
     return left[:-1] + right
 
 def subsample_boundary_grid(boundary: List[Tuple[int, int]], step: int) -> List[Tuple[int, int]]:
     """
-    Simula uma resolução menor (grade). Percorre a fronteira original
-    e marca um ponto apenas quando a fronteira muda de célula na grade.
+    Quantização por Grade (Grid Quantization).
+
+    REFERENCIAL TEÓRICO:
+    [1] Pavlidis, T. (1982). "Algorithms for Graphics and Image Processing".
     
-    Args:
-        boundary: Lista original de pixels.
-        step: O tamanho da célula (precisão). Ex: 15 ou 20.
+    EXPLICAÇÃO:
+    Reduz a resolução espacial da curva sobrepondo uma grade grossa (tamanho 'step') sobre a imagem.
+    Sempre que a fronteira cruza de uma célula da grade para outra, registra-se um vértice.
+    Isso gera uma versão "pixelada" em baixa resolução do contorno, ideal para gerar 
+    Cadeias de Freeman curtas e representativas.
     """
     if not boundary or step <= 0:
         return []
 
     simplified_points = []
     last_grid_pos = None
-
-    # Adiciona o primeiro ponto ajustado à grade
     start_y, start_x = boundary[0]
-    # Centraliza o ponto na célula da grade para ficar bonito visualmente
     offset = step // 2 
     
     for y, x in boundary:
-        # Calcula a coordenada na "Macro Grade"
+        # Coordenada na Macro Grade
         gy = y // step
         gx = x // step
-        
         current_grid_pos = (gy, gx)
 
-        # Se mudou de célula na grade, registra o novo ponto
+        # Detecta transição de célula
         if current_grid_pos != last_grid_pos:
-            # Reconverte para coordenadas de pixel (escala real) para desenhar na tela
             pixel_y = (gy * step) + offset
             pixel_x = (gx * step) + offset
-            
             simplified_points.append((pixel_y, pixel_x))
             last_grid_pos = current_grid_pos
 
-    # Garante que o polígono feche (o último ponto conecta ao primeiro)
+    # Garante fechamento do polígono
     if len(simplified_points) > 2:
-        # Verifica se o último ponto é vizinho do primeiro na grade
-        # Se estiver muito longe, pode precisar conectar, mas geralmente o loop fecha.
         if simplified_points[0] != simplified_points[-1]:
              simplified_points.append(simplified_points[0])
 
@@ -317,16 +343,12 @@ def subsample_boundary_grid(boundary: List[Tuple[int, int]], step: int) -> List[
 
 def get_freeman_from_points(points: List[Tuple[int, int]]) -> List[int]:
     """
-    Gera a cadeia de Freeman calculando a direção entre pontos consecutivos.
-    Como os pontos vêm da grade, as direções serão naturalmente quantizadas (0-7).
+    Calcula a Cadeia de Freeman a partir de vértices esparsos.
+    As direções são calculadas trigonometricamente (atan2) e quantizadas em 8 setores (45 graus).
     """
     chain = []
-    if len(points) < 2:
-        return []
+    if len(points) < 2: return []
 
-    # Mapeamento de ângulos para códigos Freeman
-    # (dy, dx) -> código
-    # Nota: y cresce para baixo na imagem
     def get_code(dy, dx):
         angle = math.degrees(math.atan2(dy, dx))
         if angle < 0: angle += 360
@@ -336,19 +358,28 @@ def get_freeman_from_points(points: List[Tuple[int, int]]) -> List[int]:
     for i in range(1, len(points)):
         p_prev = points[i-1]
         p_curr = points[i]
-        
         dy = p_curr[0] - p_prev[0]
         dx = p_curr[1] - p_prev[1]
-        
-        if dy == 0 and dx == 0:
-            continue
-            
+        if dy == 0 and dx == 0: continue
         code = get_code(dy, dx)
         chain.append(code)
         
     return chain
 
+# --- UTILITÁRIOS DE DESENHO (Rasterização de Linha) ---
+
 def _draw_line(image: List[List[int]], start: Tuple[int, int], end: Tuple[int, int], value: int) -> None:
+    """
+    Algoritmo de Linha de Bresenham.
+    
+    REFERENCIAL TEÓRICO:
+    [1] Bresenham, J. E. (1965). "Algorithm for computer control of a digital plotter".
+        IBM Systems Journal, 4(1), 25-30.
+        
+    EXPLICAÇÃO:
+    Algoritmo incremental para rasterização de linhas que utiliza apenas aritmética inteira (somas e subtrações),
+    sendo extremamente eficiente para conectar os pontos da fronteira simplificada.
+    """
     y0, x0 = start
     y1, x1 = end
     
@@ -363,15 +394,11 @@ def _draw_line(image: List[List[int]], start: Tuple[int, int], end: Tuple[int, i
     width = len(image[0])
 
     while True:
-        # 1. Desenha o pixel atual se estiver dentro dos limites
         if 0 <= y < height and 0 <= x < width:
             image[y][x] = value
             
-        # 2. CONDIÇÃO DE PARADA: Verificação imediata após desenhar
-        if y == y1 and x == x1:
-            break
+        if y == y1 and x == x1: break
             
-        # 3. Cálculo do erro e incremento
         e2 = 2 * err
         if e2 > -dy:
             err -= dy
@@ -380,9 +407,7 @@ def _draw_line(image: List[List[int]], start: Tuple[int, int], end: Tuple[int, i
             err += dx
             y += sy
             
-        # 4. Segurança extra: se sair dos limites da imagem, para o traçado
-        if x < -width or x > 2*width or y < -height or y > 2*height:
-            break
+        if x < -width or x > 2*width or y < -height or y > 2*height: break
 
 def connect_points_image(
     points: List[Tuple[int, int]],
@@ -391,6 +416,7 @@ def connect_points_image(
     value: int = 255,
     close: bool = True,
 ) -> List[List[int]]:
+    """Conecta uma lista de pontos com linhas retas (Visualização do Polígono)."""
     image = zeros(height, width, 0)
     if len(points) < 2:
         return image
@@ -399,5 +425,3 @@ def connect_points_image(
     if close and len(points) > 2:
         _draw_line(image, points[-1], points[0], value)
     return image
-
-    
